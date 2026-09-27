@@ -1,5 +1,16 @@
 [
   {
+    "sleeve": "equities",
+    "ts": "2026-09-25T15:37:00-04:00",
+    "ticker": "QCOM",
+    "side": "buy",
+    "qty": 0.743509,
+    "pnl_frac": 0.0,
+    "running_pnl_frac": 0.0,
+    "running_balance_frac": 1.00174,
+    "why": "SWING unlock Joe/Wags; soft tgt flexible"
+  },
+  {
     "sleeve": "crypto",
     "ts": "2026-09-26T12:36:50-04:00",
     "ticker": "AVAX",
@@ -16,9 +27,9 @@
     "ticker": "AVAX",
     "side": "sell",
     "qty": 2.2528,
-    "pnl_frac": -0.0018333333333333335,
-    "running_pnl_frac": -0.0018333333333333335,
-    "running_balance_frac": 0.9981666666666666,
+    "pnl_frac": -0.0018333333,
+    "running_pnl_frac": -0.0018333333,
+    "running_balance_frac": 0.9981666667,
     "why": "backfill from RH"
   },
   {
@@ -28,8 +39,8 @@
     "side": "buy",
     "qty": 0.2066,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.0018333333333333335,
-    "running_balance_frac": 0.9981666666666666,
+    "running_pnl_frac": -0.0018333333,
+    "running_balance_frac": 0.9981666667,
     "why": "backfill from RH"
   },
   {
@@ -39,8 +50,8 @@
     "side": "buy",
     "qty": 0.2062,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.0018333333333333335,
-    "running_balance_frac": 0.9981666666666666,
+    "running_pnl_frac": -0.0018333333,
+    "running_balance_frac": 0.9981666667,
     "why": "backfill from RH"
   },
   {
@@ -49,9 +60,9 @@
     "ticker": "QNT",
     "side": "sell",
     "qty": 0.2066,
-    "pnl_frac": -0.0008333333333333334,
-    "running_pnl_frac": -0.002666666666666667,
-    "running_balance_frac": 0.9973333333333333,
+    "pnl_frac": -0.0008333333,
+    "running_pnl_frac": -0.0026666667,
+    "running_balance_frac": 0.9973333333,
     "why": "backfill from RH"
   },
   {
@@ -61,8 +72,8 @@
     "side": "buy",
     "qty": 0.01632,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.002666666666666667,
-    "running_balance_frac": 0.9973333333333333,
+    "running_pnl_frac": -0.0026666667,
+    "running_balance_frac": 0.9973333333,
     "why": "backfill from RH"
   },
   {
@@ -72,8 +83,8 @@
     "side": "buy",
     "qty": 5171.0,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.002666666666666667,
-    "running_balance_frac": 0.9973333333333333,
+    "running_pnl_frac": -0.0026666667,
+    "running_balance_frac": 0.9973333333,
     "why": "backfill from RH"
   },
   {
@@ -83,8 +94,8 @@
     "side": "buy",
     "qty": 1924.0,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.002666666666666667,
-    "running_balance_frac": 0.9973333333333333,
+    "running_pnl_frac": -0.0026666667,
+    "running_balance_frac": 0.9973333333,
     "why": "backfill from RH"
   },
   {
@@ -94,8 +105,8 @@
     "side": "buy",
     "qty": 355.2,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.002666666666666667,
-    "running_balance_frac": 0.9973333333333333,
+    "running_pnl_frac": -0.0026666667,
+    "running_balance_frac": 0.9973333333,
     "why": "backfill from RH"
   },
   {
@@ -105,8 +116,8 @@
     "side": "buy",
     "qty": 0.74464,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.002666666666666667,
-    "running_balance_frac": 0.9973333333333333,
+    "running_pnl_frac": -0.0026666667,
+    "running_balance_frac": 0.9973333333,
     "why": "backfill from RH"
   },
   {
@@ -116,8 +127,8 @@
     "side": "buy",
     "qty": 0.22637,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.002666666666666667,
-    "running_balance_frac": 0.9973333333333333,
+    "running_pnl_frac": -0.0026666667,
+    "running_balance_frac": 0.9973333333,
     "why": "backfill from RH"
   },
   {
@@ -127,8 +138,8 @@
     "side": "buy",
     "qty": 192.0,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.002666666666666667,
-    "running_balance_frac": 0.9973333333333333,
+    "running_pnl_frac": -0.0026666667,
+    "running_balance_frac": 0.9973333333,
     "why": "backfill from RH"
   },
   {
@@ -138,8 +149,8 @@
     "side": "buy",
     "qty": 14.081,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.002666666666666667,
-    "running_balance_frac": 0.9973333333333333,
+    "running_pnl_frac": -0.0026666667,
+    "running_balance_frac": 0.9973333333,
     "why": "backfill from RH"
   },
   {
@@ -149,8 +160,8 @@
     "side": "buy",
     "qty": 1.9159,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.002666666666666667,
-    "running_balance_frac": 0.9973333333333333,
+    "running_pnl_frac": -0.0026666667,
+    "running_balance_frac": 0.9973333333,
     "why": "backfill from RH"
   },
   {
@@ -160,8 +171,8 @@
     "side": "buy",
     "qty": 2.005,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.002666666666666667,
-    "running_balance_frac": 0.9973333333333333,
+    "running_pnl_frac": -0.0026666667,
+    "running_balance_frac": 0.9973333333,
     "why": "backfill from RH"
   },
   {
@@ -171,8 +182,8 @@
     "side": "buy",
     "qty": 11.21,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.002666666666666667,
-    "running_balance_frac": 0.9973333333333333,
+    "running_pnl_frac": -0.0026666667,
+    "running_balance_frac": 0.9973333333,
     "why": "backfill from RH"
   },
   {
@@ -182,8 +193,8 @@
     "side": "buy",
     "qty": 0.69,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.002666666666666667,
-    "running_balance_frac": 0.9973333333333333,
+    "running_pnl_frac": -0.0026666667,
+    "running_balance_frac": 0.9973333333,
     "why": "backfill from RH"
   },
   {
@@ -193,8 +204,8 @@
     "side": "buy",
     "qty": 9.484,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.002666666666666667,
-    "running_balance_frac": 0.9973333333333333,
+    "running_pnl_frac": -0.0026666667,
+    "running_balance_frac": 0.9973333333,
     "why": "backfill from RH"
   },
   {
@@ -204,8 +215,8 @@
     "side": "buy",
     "qty": 3.92,
     "pnl_frac": 0.0,
-    "running_pnl_frac": -0.002666666666666667,
-    "running_balance_frac": 0.9973333333333333,
+    "running_pnl_frac": -0.0026666667,
+    "running_balance_frac": 0.9973333333,
     "why": "backfill from RH"
   },
   {
@@ -215,8 +226,8 @@
     "side": "sell",
     "qty": 0.1031,
     "pnl_frac": 0.01325,
-    "running_pnl_frac": 0.010583333333333333,
-    "running_balance_frac": 1.0105833333333334,
+    "running_pnl_frac": 0.0105833333,
+    "running_balance_frac": 1.0105833333,
     "why": "+15% scale"
   },
   {
@@ -225,9 +236,9 @@
     "ticker": "W",
     "side": "sell",
     "qty": 1058.0,
-    "pnl_frac": 0.007693666666666667,
+    "pnl_frac": 0.0076936667,
     "running_pnl_frac": 0.018277,
-    "running_balance_frac": 1.0182769999999999,
+    "running_balance_frac": 1.018277,
     "why": "+15% scale"
   },
   {
@@ -238,7 +249,7 @@
     "qty": 886.2,
     "pnl_frac": 0.0,
     "running_pnl_frac": 0.018277,
-    "running_balance_frac": 1.0182769999999999,
+    "running_balance_frac": 1.018277,
     "why": "artifact buy"
   },
   {
@@ -258,21 +269,10 @@
     "ticker": "ORCA",
     "side": "sell",
     "qty": 15.13,
-    "pnl_frac": 0.0010333333333333334,
-    "running_pnl_frac": 0.02546033333333333,
-    "running_balance_frac": 1.0254603333333334,
+    "pnl_frac": 0.0010333333,
+    "running_pnl_frac": 0.0254603333,
+    "running_balance_frac": 1.0254603333,
     "why": "rotation small gainer"
-  },
-  {
-    "sleeve": "crypto",
-    "ts": "2026-09-27T17:56:25-04:00",
-    "ticker": "NEAR",
-    "side": "buy",
-    "qty": 4.93,
-    "pnl_frac": 0.0,
-    "running_pnl_frac": 0.02546033333333333,
-    "running_balance_frac": 1.0254603333333334,
-    "why": "backfill from RH"
   },
   {
     "sleeve": "crypto",
@@ -281,8 +281,19 @@
     "side": "buy",
     "qty": 149.5,
     "pnl_frac": 0.0,
-    "running_pnl_frac": 0.02546033333333333,
-    "running_balance_frac": 1.0254603333333334,
+    "running_pnl_frac": 0.0254603333,
+    "running_balance_frac": 1.0254603333,
+    "why": "backfill from RH"
+  },
+  {
+    "sleeve": "crypto",
+    "ts": "2026-09-27T17:56:25-04:00",
+    "ticker": "NEAR",
+    "side": "buy",
+    "qty": 4.93,
+    "pnl_frac": 0.0,
+    "running_pnl_frac": 0.0254603333,
+    "running_balance_frac": 1.0254603333,
     "why": "backfill from RH"
   },
   {
@@ -291,21 +302,10 @@
     "ticker": "VVV",
     "side": "sell",
     "qty": 0.69,
-    "pnl_frac": -0.004666666666666666,
-    "running_pnl_frac": 0.02079366666666667,
-    "running_balance_frac": 1.0207936666666666,
-    "why": "artifact sell exit (24h -2.20% vol z=1.47 conv 0.63)"
-  },
-  {
-    "sleeve": "crypto",
-    "ts": "2026-09-27T18:53:18-04:00",
-    "ticker": "SEI",
-    "side": "buy",
-    "qty": 354.11,
-    "pnl_frac": 0.0,
-    "running_pnl_frac": 0.02079366666666667,
-    "running_balance_frac": 1.0207936666666666,
-    "why": "artifact buy $27.64 conv 0.92 (+7.73% 24h vol z=2.99)"
+    "pnl_frac": -0.0046666667,
+    "running_pnl_frac": 0.0207936667,
+    "running_balance_frac": 1.0207936667,
+    "why": "artifact sell exit"
   },
   {
     "sleeve": "crypto",
@@ -314,9 +314,20 @@
     "side": "buy",
     "qty": 63.89,
     "pnl_frac": 0.0,
-    "running_pnl_frac": 0.02079366666666667,
-    "running_balance_frac": 1.0207936666666666,
-    "why": "artifact buy $22.59 conv 0.75 (+2.10% 24h vol z=5.96)"
+    "running_pnl_frac": 0.0207936667,
+    "running_balance_frac": 1.0207936667,
+    "why": "artifact buy"
+  },
+  {
+    "sleeve": "crypto",
+    "ts": "2026-09-27T18:53:18-04:00",
+    "ticker": "SEI",
+    "side": "buy",
+    "qty": 354.11,
+    "pnl_frac": 0.0,
+    "running_pnl_frac": 0.0207936667,
+    "running_balance_frac": 1.0207936667,
+    "why": "artifact buy"
   },
   {
     "sleeve": "crypto",
@@ -325,19 +336,8 @@
     "side": "buy",
     "qty": 17.581,
     "pnl_frac": 0.0,
-    "running_pnl_frac": 0.02079366666666667,
-    "running_balance_frac": 1.0792216666666667,
-    "why": "artifact buy $22.27 conv 0.74 (+8.28% 24h vol z=0.55)"
-  },
-  {
-    "sleeve": "equities",
-    "ts": "2026-09-25T15:37:00-04:00",
-    "ticker": "QCOM",
-    "side": "buy",
-    "qty": 0.743509,
-    "pnl_frac": 0,
-    "running_pnl_frac": 0,
-    "running_balance_frac": 1.00174,
-    "why": "SWING unlock Joe/Wags; soft tgt flexible"
+    "running_pnl_frac": 0.0207936667,
+    "running_balance_frac": 1.0792333333,
+    "why": "artifact buy"
   }
 ]
