@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agentic sleeves KPI</title>
+  <meta name="description" content="Read-only KPI board for Agentic sleeves. Crypto, Equities, and combined. Dollars are seed times fraction from scrubbed data.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%2312110e' width='32' height='32'/%3E%3Crect fill='%23e3a15a' x='6' y='8' width='8' height='16'/%3E%3Crect fill='%237eb8c4' x='18' y='14' width='8' height='10'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,640&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p class="eyebrow">Agentic sleeves</p>
+      <h1>KPI board</h1>
+    </div>
+    <p class="lede">Crypto, Equities, and the combined book. Read-only. Dollars on this page are the sleeve seed times the fraction in the scrubbed snapshot.</p>
+  </header>
+  <section id="status" class="status" aria-live="polite">
+    <p class="status-copy">Loading snapshot…</p>
+  </section>
+  <main id="board"></main>
+  <section class="tapes-head">
+    <h2>Scrubbed fills</h2>
+    <p>Trade tape from <code>kpi_trades_scrubbed</code>. No order ids, no account fields.</p>
+  </section>
+  <div id="tapes" class="tapes"></div>
+  <footer>
+    <p>Static page. It reads <code>data/*.json</code> only and does not place orders.</p>
+  </footer>
+  <noscript>This board needs JavaScript to read the committed JSON snapshot.</noscript>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
