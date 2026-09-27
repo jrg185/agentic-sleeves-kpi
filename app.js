@@ -214,49 +214,124 @@ function oosText(oos) {
   return bits.join(" \u00b7 ") || "Pending T04.";
 }
 
-function renderModels(payload) {
+function oosRows(payload) {
+  if (Array.isArray(payload)) return payload.filter((row) => row && typeof row === "object");
+  if (payload && Array.isArray(payload.rows)) return payload.rows.filter((row) => row && typeof row === "object");
+  return [];
+}
+
+function sameSleeve(row, sleeve) {
+  const value = String(row.sleeve || row.book || row.asset_class || "").trim().toLowerCase();
+  if (sleeve === "equities") return value === "equities" || value === "equity";
+  return value === sleeve;
+}
+
+function formatMetricRow(row) {
+  const hasFit = row.auc != null || row.brier != null || row.n_long != null || row.after_cost_mean != null;
+  if (!hasFit) return summarizeOosRow(row);
+  const bits = [String(row.model || row.name || "model")];
+  if (row.auc != null) bits.push(`AUC ${row.auc}`);
+  if (row.brier != null) bits.push(`Brier ${row.brier}`);
+  if (row.n_long != null) bits.push(`n_long ${row.n_long}`);
+  if (row.after_cost_mean != null) bits.push(`after cost ${row.after_cost_mean}`);
+  if (row.sleeve_ir_vs_spy != null) bits.push(`IR vs SPY ${row.sleeve_ir_vs_spy}`);
+  if (row.sleeve_sharpe != null) bits.push(`Sharpe ${row.sleeve_sharpe}`);
+  if (row.n_cohorts != null) bits.push(`${row.n_cohorts} cohorts`);
+  if (row.promoted === false) bits.push("not promoted");
+  if (row.promoted === true) bits.push("promoted");
+  if (row.note) bits.push(String(row.note));
+  return bits.join(" \u00b7 ");
+}
+
+function summarizeOosRow(row) {
+  if (row.hit_rate != null || row.avg_return != null || row.n != null || row.window) return oosText(row);
+  const skip = new Set(["sleeve", "book", "name"]);
+  const bits = [];
+  for (const [key, value] of Object.entries(row)) {
+    if (skip.has(key) || value == null || value === "") continue;
+    bits.push(`${key} ${value}`);
+    if (bits.length >= 4) break;
+  }
+  return bits.join(" \u00b7 ") || "Pending T04.";
+}
+
+function renderModels(payload, oosPayload) {
   modelsEl.replaceChildren();
-  const models = payload && Array.isArray(payload.models) ? payload.models : [];
+  const models = payload && Array.isArray(payload.models) ? payload.models.slice() : [];
+  const exported = oosRows(oosPayload);
   if (payload && payload.note) modelsEl.append(el("p", "note", String(payload.note)));
+  if (oosPayload && oosPayload.updated_at) {
+    modelsEl.append(el("p", "fine", `OOS updated ${oosPayload.updated_at}`));
+  }
+  if (!models.length && exported.length) {
+    for (const row of exported) {
+      models.push({
+        sleeve: row.sleeve || row.book || (String(row.asset_class || "").toLowerCase() === "equity" ? "equities" : row.asset_class) || "",
+        name: row.name || row.model || row.sleeve || "Model",
+        used: row.used || "\u2014",
+        training: row.training || "\u2014",
+        data_source: row.data_source || row.data || "\u2014",
+        oos: row,
+      });
+    }
+  }
   if (!models.length) {
-    modelsEl.append(el("p", "empty", "No model cards in data/models.json."));
+    modelsEl.append(el("p", "empty", "No model cards in this snapshot."));
     return;
   }
   const grid = el("div", "model-grid");
+  const used = new Set();
   for (const model of models) {
+    const mine = exported.filter((row) => sameSleeve(row, String(model.sleeve || "").toLowerCase()));
+    for (const row of mine) used.add(row);
     const card = el("article", "sleeve model-card");
     const head = el("header", "sleeve-head");
     head.append(el("h2", null, model.name || "Model"));
     if (model.sleeve) head.append(el("p", "fine", String(model.sleeve)));
     card.append(head);
     const list = el("dl");
-    const rows = [
+    const fields = [
       ["Used", model.used],
       ["Training", model.training],
       ["Data", model.data_source],
-      ["OOS", oosText(model.oos)],
     ];
-    for (const [label, value] of rows) {
+    for (const [label, value] of fields) {
       list.append(el("dt", null, label), el("dd", null, value == null || value === "" ? "\u2014" : String(value)));
     }
+    list.append(el("dt", null, "OOS"));
+    const oosDd = el("dd");
+    if (mine.length) {
+      const items = el("ul", "oos-list");
+      for (const row of mine) items.append(el("li", null, formatMetricRow(row)));
+      oosDd.append(items);
+    } else {
+      oosDd.textContent = oosText(model.oos);
+    }
+    list.append(oosDd);
     card.append(list);
     grid.append(card);
   }
   modelsEl.append(grid);
+  const rest = exported.filter((row) => !used.has(row));
+  if (rest.length) {
+    const extra = el("p", "note", rest.map(summarizeOosRow).join("; "));
+    modelsEl.append(extra);
+  }
 }
 
 async function main() {
   tabSleeves.addEventListener("click", () => showTab("sleeves"));
   tabModels.addEventListener("click", () => showTab("models"));
   try {
-    const [summary, trades, meta, models] = await Promise.all([
+    const [summary, trades, meta, models, oos] = await Promise.all([
       loadJson("data/kpi_summary.json"),
       loadJson("data/kpi_trades_scrubbed.json"),
       loadJson("data/meta.json"),
       loadJson("data/models.json").catch(() => ({ models: [], note: "data/models.json is not in this snapshot." })),
+      loadJson("data/models_oos.json").catch(() => ({ rows: [] })),
     ]);
     render(summary, trades, meta);
-    renderModels(models);
+    renderModels(models, oos);
   } catch (error) {
     statusEl.replaceChildren(el("p", "status-copy", "KPI JSON did not load."));
     boardEl.replaceChildren(el("p", "empty", String(error.message || error)));
