@@ -61,9 +61,15 @@ function renderSleeve(derived, { hero = false } = {}) {
   card.append(head);
 
   const grid = el("div", "metrics");
+  const balance = metric(
+    "Running balance (book)",
+    formatUsd(derived.runningBalance),
+    tone(derived.runningBalance)
+  );
+  balance.append(el("p", "fine", "Book = cash + MTM (interim: start + P&L)."));
   grid.append(
     metric("Start", formatUsd(derived.seed)),
-    metric("Running balance", formatUsd(derived.runningBalance), tone(derived.runningBalance)),
+    balance,
     metric(
       "P&L",
       "",
@@ -133,7 +139,7 @@ function renderTape(sleeve, trades) {
   const caption = el("caption", null, `${labelFor(sleeve)} fills. Trade P&L dollars are the sleeve seed times pnl_frac.`);
   const thead = el("thead");
   const headRow = el("tr");
-  for (const label of ["Time", "Ticker", "Side", "Qty", "Trade P&L", "Running P&L", "Running balance", "Why"]) {
+  for (const label of ["Time", "Ticker", "Side", "Qty", "Trade P&L", "Running P&L", "Running balance (book)", "Why"]) {
     headRow.append(el("th", null, label));
   }
   thead.append(headRow);

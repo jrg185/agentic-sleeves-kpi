@@ -2,7 +2,7 @@
   {
     "sleeve": "crypto",
     "as_of": "2026-09-27T22:06:00-04:00",
-    "running_balance_frac": -0.0230333333,
+    "running_balance_frac": 1.0284333333,
     "running_pnl_frac": 0.0284333333,
     "day_pnl_frac": null,
     "day_kill_pct": -0.1,
@@ -13,7 +13,7 @@
   {
     "sleeve": "equities",
     "as_of": "2026-09-27T22:06:00-04:00",
-    "running_balance_frac": 0.7,
+    "running_balance_frac": 1.0,
     "running_pnl_frac": 0.0,
     "day_pnl_frac": null,
     "day_kill_pct": -0.25,
@@ -24,7 +24,7 @@
   {
     "sleeve": "combined",
     "as_of": "2026-09-27T22:06:00-04:00",
-    "running_balance_frac": 0.4288625,
+    "running_balance_frac": 1.0106625,
     "running_pnl_frac": 0.0106625,
     "day_pnl_frac": 0,
     "day_kill_pct": null,

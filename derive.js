@@ -55,9 +55,9 @@ export function money(seed, frac) {
   return Math.round((seed * frac + Number.EPSILON) * 100) / 100;
 }
 
-function fractionFrom(row, fracKeys, dollarKeys, seed) {
+function fractionFrom(row, fracKeys, dollarKeys, seed, { percentPoints = false } = {}) {
   const rawFrac = pick(row, fracKeys);
-  if (rawFrac != null && rawFrac !== "") return asFraction(rawFrac);
+  if (rawFrac != null && rawFrac !== "") return percentPoints ? asFraction(rawFrac) : num(rawFrac);
   const dollars = num(pick(row, dollarKeys));
   if (dollars == null || seed == null || seed === 0) return null;
   return dollars / seed;
@@ -65,41 +65,47 @@ function fractionFrom(row, fracKeys, dollarKeys, seed) {
 
 export function deriveSleeve(row, seeds = SEEDS_USD) {
   const seed = seedFor(row, seeds);
+  // Book / start can be above 1 (crypto ~1.028). Do not treat that as percent points.
   const runningBalanceFrac = fractionFrom(
     row,
-    ["running_balance_frac", "balance_frac", "bal_frac", "running_bal_frac"],
+    ["running_balance_frac", "running_bal_vs_start", "balance_frac", "bal_frac", "running_bal_frac"],
     ["running_balance", "running_balance_usd", "balance_usd"],
     seed
   );
   const runningPnlFrac = fractionFrom(
     row,
-    ["running_pnl_frac", "pnl_frac", "running_pnl_pct"],
+    ["running_pnl_frac", "pnl_pct_of_book", "pnl_frac", "running_pnl_pct"],
     ["running_pnl_usd", "pnl_usd", "running_pnl"],
-    seed
+    seed,
+    { percentPoints: true }
   );
   const dayPnlFrac = fractionFrom(
     row,
     ["day_pnl_frac", "day_pnl_pct"],
     ["day_pnl_usd", "day_pnl"],
-    seed
+    seed,
+    { percentPoints: true }
   );
   const dayKillFrac = fractionFrom(
     row,
     ["day_kill_pct", "kill_pct", "day_kill_frac"],
     ["day_kill_usd", "day_kill_dollars", "day_kill"],
-    seed
+    seed,
+    { percentPoints: true }
   );
   const killHeadroomFrac = fractionFrom(
     row,
     ["kill_headroom_frac", "headroom_frac", "kill_headroom_pct"],
     ["kill_headroom_usd", "kill_headroom_dollars", "kill_headroom"],
-    seed
+    seed,
+    { percentPoints: true }
   );
   const dayTargetFrac = fractionFrom(
     row,
     ["day_target_pct", "target_pct", "day_target_frac"],
     ["day_target_usd", "day_target_dollars", "day_target"],
-    seed
+    seed,
+    { percentPoints: true }
   );
 
   return {

@@ -12,7 +12,7 @@ The page is static. It does not place orders, and it does not call Supabase from
 For each sleeve and the combined book:
 
 - Start (the sleeve seed)
-- Running balance
+- Running balance (book): cash + mark-to-market of open positions. Until true MTM, book = start + running P&L, so the fraction is `(start + running_pnl) / start`. It is not cash left after a fill.
 - P&L in dollars and percent
 - Day P&L
 - Day kill rail (percent of book, and the dollar size of that rail)
@@ -63,6 +63,8 @@ GitHub only runs a workflow from `.github/workflows/`. Copy that file to `.githu
 
 There is no Sheets API key and no Google CSV export in this path. A sheet may feed Supabase somewhere else; this site does not.
 
+The live `kpi_summary` view uses warehouse names. Export remaps them onto the page shape before writing JSON: `running_bal_vs_start` → `running_balance_frac`, `pnl_pct_of_book` → `running_pnl_frac`, `notes` → `note`. `sleeve`, `as_of`, `day_kill_pct`, `day_target_pct`, and `kill_headroom_frac` stay as they are. When both a warehouse book ratio and a cash residual are present, the warehouse ratio wins.
+
 ### View contract
 
 `kpi_summary` rows:
@@ -71,7 +73,7 @@ There is no Sheets API key and no Google CSV export in this path. A sheet may fe
 | --- | --- |
 | `sleeve` | `crypto`, `equities`, or `combined` |
 | `as_of` | Snapshot timestamp |
-| `running_balance_frac` | Running balance ÷ seed |
+| `running_balance_frac` | Sleeve book ÷ seed. Interim book = start + running P&L. A value above 1 means the book is above its start (crypto sample ≈ 1.028433). |
 | `running_pnl_frac` | Running P&L ÷ seed |
 | `day_pnl_frac` | Day P&L ÷ seed, or null |
 | `day_kill_pct` | Kill rail as a fraction of book (`-0.10` = −10%). Percent points such as `-10` are also accepted. |
@@ -92,7 +94,7 @@ Optional seed override on a row: `start`, `seed`, `start_usd`, `seed_usd`, or `b
 | `qty` | Quantity |
 | `pnl_frac` | Trade P&L ÷ sleeve seed |
 | `running_pnl_frac` | Running P&L ÷ sleeve seed |
-| `running_balance_frac` | Running balance ÷ sleeve seed |
+| `running_balance_frac` | Book at that fill ÷ sleeve seed, where book = start + running P&L at the row. Not cash leftover. |
 | `why` | Short reason. No PII. |
 
 The exporter drops `email`, `phone`, `order_id`, `account_id`, `user_id`, `api_key`, `service_role`, `secret`, `password`, `token`, `ssn`, and `address` if a view ever returns them. It also drops JWT-shaped strings.

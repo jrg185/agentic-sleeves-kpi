@@ -63,23 +63,61 @@ DENY_KEYS = {
 SEEDS = {"crypto": Decimal("300"), "equities": Decimal("500")}
 
 
-def frac(dollars: str, seed: Decimal) -> float:
+def frac(dollars: str | Decimal, seed: Decimal) -> float:
     quant = (Decimal(dollars) / seed).quantize(Decimal("0.0000000001"))
     return float(quant)
 
 
+def book_frac(running_pnl: str | Decimal, seed: Decimal) -> float:
+    """Sleeve book / start. Interim book is start + running P&L, never cash residual."""
+    if seed == 0:
+        raise ValueError("seed is zero")
+    return frac(seed + Decimal(running_pnl), seed)
+
+
+# Live public.kpi_summary uses warehouse names. The page reads the right-hand names.
+# running_bal_vs_start is book/start and wins over a cash residual still called
+# running_balance_frac.
+SUMMARY_REMAP = (
+    ("running_bal_vs_start", "running_balance_frac"),
+    ("pnl_pct_of_book", "running_pnl_frac"),
+    ("notes", "note"),
+)
+
+
+def reshape_summary_row(row: dict) -> dict:
+    """Map a live kpi_summary row onto the page contract."""
+    if not isinstance(row, dict):
+        return row
+    out = dict(row)
+    for src, dest in SUMMARY_REMAP:
+        if src not in out:
+            continue
+        if out[src] is not None:
+            out[dest] = out[src]
+        del out[src]
+    return out
+
+
 def sample_bundle() -> dict:
-    """Stand-in rows in the scrubbed view shape. Not a live fetch."""
+    """Stand-in rows in the scrubbed view shape. Not a live fetch.
+
+    running_balance_frac is sleeve book / start. Until true mark-to-market,
+    book = start + running P&L. Cash left after a fill is not the balance.
+    """
     crypto = SEEDS["crypto"]
     equities = SEEDS["equities"]
     combined = crypto + equities
+    crypto_pnl = "8.53"
+    equities_pnl = "0"
+    combined_pnl = str(Decimal(crypto_pnl) + Decimal(equities_pnl))
     as_of = "2026-09-27T22:06:00-04:00"
     summary = [
         {
             "sleeve": "crypto",
             "as_of": as_of,
-            "running_balance_frac": frac("-6.91", crypto),
-            "running_pnl_frac": frac("8.53", crypto),
+            "running_balance_frac": book_frac(crypto_pnl, crypto),
+            "running_pnl_frac": frac(crypto_pnl, crypto),
             "day_pnl_frac": None,
             "day_kill_pct": -0.10,
             "kill_headroom_frac": frac("30", crypto),
@@ -89,8 +127,8 @@ def sample_bundle() -> dict:
         {
             "sleeve": "equities",
             "as_of": as_of,
-            "running_balance_frac": frac("350", equities),
-            "running_pnl_frac": frac("0", equities),
+            "running_balance_frac": book_frac(equities_pnl, equities),
+            "running_pnl_frac": frac(equities_pnl, equities),
             "day_pnl_frac": None,
             "day_kill_pct": -0.25,
             "kill_headroom_frac": frac("125", equities),
@@ -100,8 +138,8 @@ def sample_bundle() -> dict:
         {
             "sleeve": "combined",
             "as_of": as_of,
-            "running_balance_frac": frac("343.09", combined),
-            "running_pnl_frac": frac("8.53", combined),
+            "running_balance_frac": book_frac(combined_pnl, combined),
+            "running_pnl_frac": frac(combined_pnl, combined),
             "day_pnl_frac": 0,
             "day_kill_pct": None,
             "kill_headroom_frac": frac("155", combined),
@@ -109,18 +147,19 @@ def sample_bundle() -> dict:
             "note": "Per-sleeve kill rails. Crypto day target is realized-only.",
         },
     ]
+    # pnl and running P&L are dollars. Book at the fill is start + running P&L.
     trade_src = [
-        ("crypto", "2026-09-27T09:58:00-04:00", "QNT", "sell", 0.1031, "3.98", "3.98", "16.42", "+15% scale"),
-        ("crypto", "2026-09-27T12:50:00-04:00", "W", "sell", 1058, "2.20", "6.18", "32.69", "+15% scale"),
-        ("crypto", "2026-09-27T14:55:00-04:00", "GRT", "buy", 886.2, "0", "6.18", "5.51", "artifact buy"),
-        ("crypto", "2026-09-27T17:56:00-04:00", "GRT", "sell", 443.1, "1.85", "8.03", "20.82", "+15% scale"),
-        ("crypto", "2026-09-27T17:56:00-04:00", "ORCA", "sell", 15.13, "0.50", "8.53", "47.38", "rotation"),
-        ("crypto", "2026-09-27T17:56:00-04:00", "NEAR", "buy", 4.93, "0", "8.53", "20.03", "rotation"),
-        ("crypto", "2026-09-27T17:56:00-04:00", "IMX", "buy", 149.5, "0", "8.53", "-6.91", "rotation"),
-        ("equities", "2026-09-25T15:37:00-04:00", "QCOM", "buy", 0.743509, "0", "0", "350", "swing entry"),
+        ("crypto", "2026-09-27T09:58:00-04:00", "QNT", "sell", 0.1031, "3.98", "3.98", "+15% scale"),
+        ("crypto", "2026-09-27T12:50:00-04:00", "W", "sell", 1058, "2.20", "6.18", "+15% scale"),
+        ("crypto", "2026-09-27T14:55:00-04:00", "GRT", "buy", 886.2, "0", "6.18", "artifact buy"),
+        ("crypto", "2026-09-27T17:56:00-04:00", "GRT", "sell", 443.1, "1.85", "8.03", "+15% scale"),
+        ("crypto", "2026-09-27T17:56:00-04:00", "ORCA", "sell", 15.13, "0.50", "8.53", "rotation"),
+        ("crypto", "2026-09-27T17:56:00-04:00", "NEAR", "buy", 4.93, "0", "8.53", "rotation"),
+        ("crypto", "2026-09-27T17:56:00-04:00", "IMX", "buy", 149.5, "0", "8.53", "rotation"),
+        ("equities", "2026-09-25T15:37:00-04:00", "QCOM", "buy", 0.743509, "0", "0", "swing entry"),
     ]
     trades = []
-    for sleeve, ts, ticker, side, qty, pnl, run_pnl, bal, why in trade_src:
+    for sleeve, ts, ticker, side, qty, pnl, run_pnl, why in trade_src:
         seed = SEEDS[sleeve]
         trades.append(
             {
@@ -131,7 +170,7 @@ def sample_bundle() -> dict:
                 "qty": qty,
                 "pnl_frac": frac(pnl, seed),
                 "running_pnl_frac": frac(run_pnl, seed),
-                "running_balance_frac": frac(bal, seed),
+                "running_balance_frac": book_frac(run_pnl, seed),
                 "why": why,
             }
         )
@@ -141,9 +180,9 @@ def sample_bundle() -> dict:
         "project_ref": PROJECT_REF,
         "views": [f"public.{name}" for name in VIEWS],
         "note": (
-            "Sample snapshot in the scrubbed view shape. "
+            "Sample snapshot. Balances are sleeve book (cash + MTM; interim start + running P&L), not cash. "
             "Replaced when the export Action can read the Supabase views. "
-            "Dollar figures on the page are seed x fraction."
+            "Dollar figures on the page are seed × fraction."
         ),
     }
     models_oos = {
@@ -385,6 +424,7 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
     rows = {}
     for view in VIEWS:
         rows[view] = load_view(base_url, key, db_url, view)
+    rows["kpi_summary"] = [reshape_summary_row(row) for row in rows["kpi_summary"]]
     missing = []
     for view in OPTIONAL_VIEWS:
         try:
@@ -403,7 +443,12 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
         "row_counts": {
             name: len(rows[name]) for name in present if isinstance(rows[name], list)
         },
-        "note": "Exported from scrubbed views. Page dollars are seed x fraction.",
+        "note": (
+            "Exported from scrubbed views. Balances are sleeve book (cash + MTM; interim start + running P&L), not cash. "
+            "kpi_summary remaps running_bal_vs_start, pnl_pct_of_book, and notes "
+            "onto running_balance_frac, running_pnl_frac, and note. "
+            "Page dollars are seed × fraction."
+        ),
     }
     if missing:
         rows["meta"]["optional_missing"] = missing
