@@ -1,10 +1,7 @@
 {
-  "source": "sample",
-  "fetched_at": null,
+  "source": "sheet",
+  "fetched_at": "2026-09-27T23:45:00Z",
   "project_ref": "bsnqwgbshwszbjncglqx",
-  "views": [
-    "public.kpi_summary",
-    "public.kpi_trades_scrubbed"
-  ],
-  "note": "Sample snapshot. Balances are sleeve book from the sheet desks (crypto $323.77, realized +$6.24; equities $500.87; combined $824.64), not cash. Replaced when the export Action can read the Supabase views. Dollar figures on the page are seed \u00d7 fraction."
+  "note": "Full tape from Agentic Trading Ledger sheet. Book not cash. All outcomes kept.",
+  "trade_count": 31
 }
