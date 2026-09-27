@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Export scrubbed Supabase KPI views into data/*.json for GitHub Pages.
 
-The browser never sees this script's credentials. Set one of:
+The browser never sees this script's credentials. Set:
 
-  SUPABASE_SERVICE_ROLE_KEY   preferred; PostgREST read of the public views
-  SUPABASE_DB_URL             optional read-only Postgres URI
+  SUPABASE_URL
+  SUPABASE_SERVICE_ROLE_KEY   PostgREST read of the public views
 
-SUPABASE_URL defaults to the agentic-signals project. With neither secret,
-the script leaves the committed sample JSON in place and exits 0.
+SUPABASE_URL defaults to the agentic-signals project when unset.
+ALPHA_VANTAGE_API_KEY and FINNHUB_API_KEY are not read.
+With no service role key, the script leaves the committed sample JSON
+in place and exits 0. It does not rewrite data/models.json.
 
 Views (fraction / percent rails; no PII):
   public.kpi_summary
@@ -25,6 +27,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from decimal import Decimal
 from pathlib import Path
@@ -34,10 +37,14 @@ DATA = ROOT / "data"
 FIXTURES = ROOT / "fixtures"
 
 DEFAULT_URL = "https://bsnqwgbshwszbjncglqx.supabase.co"
+DEFAULT_BUCKET = "model-weights"
 PROJECT_REF = "bsnqwgbshwszbjncglqx"
+MAX_BUCKET_JSON = 200_000
 VIEWS = ("kpi_summary", "kpi_trades_scrubbed")
 OPTIONAL_VIEWS = ("models_oos",)
 
+# Dropped before JSON is written into the public repo. Financial fraction
+# columns are kept. Seed columns (start / seed / book_usd) are kept.
 DENY_KEYS = {
     "email",
     "phone",
@@ -136,17 +143,55 @@ def sample_bundle() -> dict:
         "note": (
             "Sample snapshot in the scrubbed view shape. "
             "Replaced when the export Action can read the Supabase views. "
-            "Dollar figures on the page are seed × fraction."
+            "Dollar figures on the page are seed x fraction."
         ),
     }
     models_oos = {
         "rows": [],
         "note": "No out-of-sample model rows in this snapshot.",
     }
+    models = {
+        "as_of": as_of,
+        "status": "placeholder",
+        "note": "OOS metrics stay empty until T04 publishes them. Replace data/models.json; the page reads these fields.",
+        "models": [
+            {
+                "sleeve": "crypto",
+                "name": "Crypto v0 heuristic",
+                "used": "Shadow advisory for the $300 crypto sleeve. Scores 24h return, volume z, and an ATR-ish range. It does not place orders.",
+                "training": "No fit. Buy when 24h return is above +2% and volume z is above 0.5. Sell when 24h return is below -2%.",
+                "data_source": "Coinbase Exchange public hourly candles, 168 bars. 57 Robinhood USD names that also have a Coinbase product.",
+                "oos": {
+                    "status": "placeholder",
+                    "window": None,
+                    "hit_rate": None,
+                    "avg_return": None,
+                    "n": None,
+                    "note": "Pending T04.",
+                },
+            },
+            {
+                "sleeve": "equities",
+                "name": "Equities sleeve",
+                "used": "No fitted equities model is published on this board.",
+                "training": "Not published.",
+                "data_source": "Scrubbed equities fills only. This page has no broker feed.",
+                "oos": {
+                    "status": "placeholder",
+                    "window": None,
+                    "hit_rate": None,
+                    "avg_return": None,
+                    "n": None,
+                    "note": "Pending T04.",
+                },
+            },
+        ],
+    }
     return {
         "kpi_summary": summary,
         "kpi_trades_scrubbed": trades,
         "models_oos": models_oos,
+        "models": models,
         "meta": meta,
     }
 
@@ -198,6 +243,7 @@ def install_sample(target: Path) -> None:
     write_json(target / "kpi_summary.json", bundle["kpi_summary"])
     write_json(target / "kpi_trades_scrubbed.json", bundle["kpi_trades_scrubbed"])
     write_json(target / "models_oos.json", bundle["models_oos"])
+    write_json(target / "models.json", bundle["models"])
     write_json(target / "meta.json", bundle["meta"])
 
 
@@ -261,6 +307,80 @@ def load_view(base_url: str, key: str | None, db_url: str | None, view: str) -> 
     return fetch_db(db_url, view)
 
 
+def storage_call(base_url: str, key: str, path: str, body: dict | None = None) -> bytes:
+    request = urllib.request.Request(
+        base_url.rstrip("/") + path,
+        data=None if body is None else json.dumps(body).encode("utf-8"),
+        method="POST" if body is not None else "GET",
+        headers={
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "agentic-sleeves-kpi-export",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return response.read()
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:120]
+        if key and key in detail:
+            detail = detail.replace(key, "[redacted]")
+        raise RuntimeError(f"storage HTTP {exc.code}") from None
+
+
+def rows_from_oos_payload(payload):
+    if isinstance(payload, list):
+        return [scrub_row(row) for row in payload if isinstance(row, dict)]
+    if isinstance(payload, dict) and isinstance(payload.get("rows"), list):
+        return [scrub_row(row) for row in payload["rows"] if isinstance(row, dict)]
+    return None
+
+
+def fetch_bucket_oos(base_url: str, key: str, bucket: str) -> list | None:
+    """Pull a small models/OOS JSON from storage when the view is absent."""
+    try:
+        listed = json.loads(
+            storage_call(
+                base_url,
+                key,
+                f"/storage/v1/object/list/{urllib.parse.quote(bucket)}",
+                {"prefix": "", "limit": 100},
+            ).decode("utf-8")
+        )
+    except Exception as exc:
+        print(f"Storage list skipped: {exc}", file=sys.stderr)
+        return None
+    if not isinstance(listed, list):
+        return None
+    names = []
+    for item in listed:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "")
+        lowered = name.lower()
+        if lowered.endswith(".json") and ("oos" in lowered or "model" in lowered):
+            names.append(name)
+    for name in names:
+        encoded = urllib.parse.quote(name)
+        try:
+            raw = storage_call(base_url, key, f"/storage/v1/object/{urllib.parse.quote(bucket)}/{encoded}")
+        except Exception as exc:
+            print(f"Storage object skipped: {exc}", file=sys.stderr)
+            continue
+        if len(raw) > MAX_BUCKET_JSON:
+            continue
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except json.JSONDecodeError:
+            continue
+        rows = rows_from_oos_payload(payload)
+        if rows is not None:
+            return rows
+    return None
+
+
 def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
     rows = {}
     for view in VIEWS:
@@ -271,10 +391,9 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
             rows[view] = load_view(base_url, key, db_url, view)
         except ViewMissing:
             missing.append(view)
-            rows[view] = {
-                "rows": [],
-                "note": f"{view} view was not present at export time.",
-            }
+            rows[view] = None
+    # A missing or empty models_oos view must not wipe a committed seed.
+    # The page keeps data/models_oos.json until the view returns rows.
     present = [name for name in (*VIEWS, *OPTIONAL_VIEWS) if name not in missing]
     rows["meta"] = {
         "source": "supabase",
@@ -284,16 +403,30 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
         "row_counts": {
             name: len(rows[name]) for name in present if isinstance(rows[name], list)
         },
-        "note": "Exported from scrubbed views. Page dollars are seed × fraction.",
+        "note": "Exported from scrubbed views. Page dollars are seed x fraction.",
     }
     if missing:
         rows["meta"]["optional_missing"] = missing
     return rows
 
 
+def oos_has_rows(payload) -> bool:
+    if isinstance(payload, list):
+        return any(isinstance(row, dict) for row in payload)
+    if isinstance(payload, dict):
+        rows = payload.get("rows")
+        return isinstance(rows, list) and any(isinstance(row, dict) for row in rows)
+    return False
+
+
 def write_bundle(target: Path, bundle: dict) -> None:
-    for name in (*VIEWS, *OPTIONAL_VIEWS, "meta"):
+    for name in (*VIEWS, "meta"):
         write_json(target / f"{name}.json", bundle[name])
+    oos = bundle.get("models_oos")
+    if oos_has_rows(oos):
+        if isinstance(oos, list):
+            oos = {"rows": oos, "updated_at": bundle["meta"]["fetched_at"]}
+        write_json(target / "models_oos.json", oos)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -320,7 +453,7 @@ def main(argv: list[str] | None = None) -> int:
             "SUPABASE_SERVICE_ROLE_KEY and SUPABASE_DB_URL are unset; "
             "leaving committed data/*.json in place."
         )
-        needed = [DATA / f"{name}.json" for name in (*VIEWS, *OPTIONAL_VIEWS, "meta")]
+        needed = [DATA / f"{name}.json" for name in (*VIEWS, *OPTIONAL_VIEWS, "models", "meta")]
         if any(not path.exists() for path in needed):
             print("Sample JSON missing; installing fixtures.", file=sys.stderr)
             install_sample(DATA)
@@ -328,6 +461,8 @@ def main(argv: list[str] | None = None) -> int:
 
     bundle = export_live(base_url, key, db_url)
     write_bundle(DATA, bundle)
+    if not (DATA / "models.json").exists():
+        write_json(DATA / "models.json", sample_bundle()["models"])
     print(
         "Exported "
         + ", ".join(f"{name}={bundle['meta']['row_counts'][name]}" for name in VIEWS)
