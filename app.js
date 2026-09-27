@@ -136,7 +136,7 @@ function renderTape(sleeve, trades) {
   }
   const wrap = el("div", "table-wrap");
   const table = el("table");
-  const caption = el("caption", null, `${labelFor(sleeve)} fills. Trade P&L dollars are the sleeve seed times pnl_frac.`);
+  const caption = el("caption", null, `${labelFor(sleeve)} fills. Trade P&L dollars are the book seed times pnl_frac.`);
   const thead = el("thead");
   const headRow = el("tr");
   for (const label of ["Time", "Ticker", "Side", "Qty", "Trade P&L", "Running P&L", "Running balance (book)", "Why"]) {
