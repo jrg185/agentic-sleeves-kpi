@@ -133,7 +133,7 @@ export function labelFor(sleeve) {
   if (sleeve === "crypto") return "Crypto";
   if (sleeve === "equities") return "Equities";
   if (sleeve === "combined") return "Combined";
-  return sleeve ? sleeve.charAt(0).toUpperCase() + sleeve.slice(1) : "Sleeve";
+  return sleeve ? sleeve.charAt(0).toUpperCase() + sleeve.slice(1) : "Book";
 }
 
 export function sortSleeves(rows, seeds) {
