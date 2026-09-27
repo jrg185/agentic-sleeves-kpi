@@ -95,7 +95,9 @@ Optional seed override on a row: `start`, `seed`, `start_usd`, `seed_usd`, or `b
 
 The exporter drops `email`, `phone`, `order_id`, `account_id`, `user_id`, `api_key`, `service_role`, `secret`, `password`, `token`, `ssn`, and `address` if a view ever returns them. It also drops JWT-shaped strings.
 
-`models_oos` is optional. The Models tab renders whatever columns that JSON contains. An empty snapshot shows no out-of-sample rows. The exporter does not fail the job when the view is absent.
+`models_oos` is optional. The exporter does not fail the job when that view is absent.
+
+The Models tab reads `data/models.json` (same shape in `fixtures/models.json`). Each card has `name`, `sleeve`, `used`, `training`, `data_source`, and `oos` (`window`, `hit_rate`, `avg_return`, `n`, `note`). Until T04 publishes metrics, `oos.status` is `placeholder` and the three numbers stay null. Replacing the file is enough; the page does not need a code change.
 
 ### Secrets
 
