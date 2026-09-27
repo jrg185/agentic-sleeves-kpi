@@ -107,6 +107,35 @@ export function deriveSleeve(row, seeds = SEEDS_USD) {
     seed,
     { percentPoints: true }
   );
+  // Page contract is realized_pnl_frac / unrealized_pnl_frac. Warehouse names
+  // are accepted so a raw view row still splits instead of blending into one P&L.
+  const realizedPnlFrac = fractionFrom(
+    row,
+    [
+      "realized_pnl_frac",
+      "realized_pnl_pct",
+      "realized_pnl_pct_of_book",
+      "realized_pct_of_book",
+      "rpnl_frac",
+    ],
+    ["realized_pnl_usd", "realized_pnl", "realized_pnl_dollars", "realized"],
+    seed,
+    { percentPoints: true }
+  );
+  const unrealizedPnlFrac = fractionFrom(
+    row,
+    [
+      "unrealized_pnl_frac",
+      "unrealized_pnl_pct",
+      "unrealized_pnl_pct_of_book",
+      "unrealized_pct_of_book",
+      "upnl_frac",
+      "u_pnl_frac",
+    ],
+    ["unrealized_pnl_usd", "unrealized_pnl", "unrealized_pnl_dollars", "unrealized", "upnl", "u_pnl"],
+    seed,
+    { percentPoints: true }
+  );
 
   return {
     sleeve: sleeveKey(row),
@@ -116,12 +145,16 @@ export function deriveSleeve(row, seeds = SEEDS_USD) {
     seed,
     runningBalanceFrac,
     runningPnlFrac,
+    realizedPnlFrac,
+    unrealizedPnlFrac,
     dayPnlFrac,
     dayKillFrac,
     killHeadroomFrac,
     dayTargetFrac,
     runningBalance: money(seed, runningBalanceFrac),
     runningPnl: money(seed, runningPnlFrac),
+    realizedPnl: money(seed, realizedPnlFrac),
+    unrealizedPnl: money(seed, unrealizedPnlFrac),
     dayPnl: money(seed, dayPnlFrac),
     dayKill: money(seed, dayKillFrac),
     killHeadroom: money(seed, killHeadroomFrac),

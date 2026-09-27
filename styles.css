@@ -215,6 +215,7 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
 .meter span.thin { background: var(--down); }
 
 .note, .fine { margin: 10px 0 0; font-size: 0.88rem; }
+.metric .fine { margin: 4px 0 0; font-size: 0.75rem; }
 
 .tapes-head { padding: 28px 0 8px; }
 .tapes-head h2 { margin: 0 0 4px; }

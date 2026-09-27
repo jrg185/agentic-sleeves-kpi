@@ -38,6 +38,17 @@ function pair(primary, secondary) {
   return wrap;
 }
 
+function pnlMetric(label, dollars, frac, caption) {
+  const node = metric(label);
+  const value = node.querySelector(".v");
+  value.replaceChildren(
+    pair(formatUsd(dollars, { signed: true }), formatPct(frac, { signed: true }))
+  );
+  value.classList.add(tone(dollars ?? frac));
+  if (caption) node.append(el("p", "fine", caption));
+  return node;
+}
+
 async function loadJson(path) {
   const response = await fetch(path, { cache: "no-cache" });
   if (!response.ok) throw new Error(`${path} ${response.status}`);
@@ -66,19 +77,13 @@ function renderSleeve(derived, { hero = false } = {}) {
     formatUsd(derived.runningBalance),
     tone(derived.runningBalance)
   );
-  balance.append(el("p", "fine", "Book = cash + MTM (interim: start + P&L)."));
+  balance.append(el("p", "fine", "Book = start + realized + unrealized."));
   grid.append(
     metric("Start", formatUsd(derived.seed)),
     balance,
-    metric(
-      "P&L",
-      "",
-      tone(derived.runningPnl)
-    )
+    pnlMetric("Realized P&L", derived.realizedPnl, derived.realizedPnlFrac, "Closed exits only"),
+    pnlMetric("Unrealized P&L", derived.unrealizedPnl, derived.unrealizedPnlFrac, "Open MTM vs cost")
   );
-  const pnl = grid.lastChild.querySelector(".v");
-  pnl.replaceChildren(pair(formatUsd(derived.runningPnl, { signed: true }), formatPct(derived.runningPnlFrac, { signed: true })));
-  pnl.classList.add(tone(derived.runningPnl));
 
   grid.append(metric("Day P&L", formatUsd(derived.dayPnl, { signed: true }), tone(derived.dayPnl)));
 

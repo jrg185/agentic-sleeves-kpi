@@ -12,8 +12,9 @@ The page is static. It does not place orders, and it does not call Supabase from
 For each sleeve and the combined book:
 
 - Start (the sleeve seed)
-- Running balance (book): cash + mark-to-market of open positions. Until true MTM, book = start + running P&L, so the fraction is `(start + running_pnl) / start`. It is not cash left after a fill.
-- P&L in dollars and percent
+- Realized P&L (closed exits only) in dollars and percent
+- Unrealized P&L (open mark-to-market versus cost) in dollars and percent
+- Running balance (book): start + realized + unrealized. The fraction is book ÷ seed. It is not an unlabeled blend of the two P&L figures, and it is not cash left after a fill.
 - Day P&L
 - Day kill rail (percent of book, and the dollar size of that rail)
 - Kill headroom (percent of book still inside the rail, and dollars)
@@ -50,7 +51,7 @@ GitHub Actions reads these scrubbed views and writes JSON into the repo:
 
 Pages serves that committed JSON. The browser only fetches `data/*.json`.
 
-Workflow source: [`scripts/export-kpi.yml`](scripts/export-kpi.yml). GitHub only runs a workflow from `.github/workflows/`. That copy is not registered yet.
+Workflow: [`.github/workflows/export-kpi.yml`](.github/workflows/export-kpi.yml) (source copy: [`scripts/export-kpi.yml`](scripts/export-kpi.yml)).
 
 - `workflow_dispatch`, and also when the workflow file or exporter script is pushed to `main`
 - Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from Actions secrets
@@ -72,7 +73,9 @@ The live `kpi_summary` view uses warehouse names. Export remaps them onto the pa
 | `sleeve` | `crypto`, `equities`, or `combined` |
 | `as_of` | Snapshot timestamp |
 | `running_balance_frac` | Sleeve book ÷ seed. Sheet desks: crypto 1.079233 ($323.77 / $300, realized +$6.24), equities 1.00174 ($500.87 / $500), combined 1.0308 ($824.64 / $800). |
-| `running_pnl_frac` | Running P&L ÷ seed |
+| `running_pnl_frac` | Running P&L ÷ seed. Tape column only. Sleeve cards do not show this as an unlabeled P&L. |
+| `realized_pnl_frac` | Closed-exit P&L ÷ seed. Also accepted: `realized_pnl_pct`, `realized_pnl_pct_of_book`, `realized_pct_of_book`, `rpnl_frac`. |
+| `unrealized_pnl_frac` | Open mark-to-market P&L ÷ seed. Also accepted: `unrealized_pnl_pct`, `unrealized_pnl_pct_of_book`, `unrealized_pct_of_book`, `upnl_frac`. |
 | `day_pnl_frac` | Day P&L ÷ seed, or null |
 | `day_kill_pct` | Kill rail as a fraction of book (`-0.10` = −10%). Percent points such as `-10` are also accepted. |
 | `kill_headroom_frac` | Room left inside the kill rail, as a fraction of book |
