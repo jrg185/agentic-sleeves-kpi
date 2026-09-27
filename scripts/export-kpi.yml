@@ -3,14 +3,14 @@ name: Export KPI
 # Reads SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY only.
 # Does not read ALPHA_VANTAGE_API_KEY or FINNHUB_API_KEY.
 # An empty service role secret leaves the committed data/*.json in place.
+# data/** pushes are ignored so the export commit does not run this job again.
 
 on:
-  workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - ".github/workflows/export-kpi.yml"
-      - "scripts/export_kpi.py"
+    paths-ignore:
+      - "data/**"
+  workflow_dispatch:
 
 permissions:
   contents: write
