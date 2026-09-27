@@ -19,15 +19,28 @@
     </div>
     <p class="lede">Crypto, Equities, and the combined book. Read-only. Dollars on this page are the sleeve seed times the fraction in the scrubbed snapshot.</p>
   </header>
+  <nav class="tabs" aria-label="Board sections">
+    <button type="button" id="tab-sleeves" aria-selected="true">Sleeves</button>
+    <button type="button" id="tab-models" aria-selected="false">Models</button>
+  </nav>
   <section id="status" class="status" aria-live="polite">
     <p class="status-copy">Loading snapshot…</p>
   </section>
-  <main id="board"></main>
-  <section class="tapes-head">
-    <h2>Scrubbed fills</h2>
-    <p>Trade tape from <code>kpi_trades_scrubbed</code>. No order ids, no account fields.</p>
-  </section>
-  <div id="tapes" class="tapes"></div>
+  <div id="panel-sleeves">
+    <main id="board"></main>
+    <section class="tapes-head">
+      <h2>Scrubbed fills</h2>
+      <p>Trade tape from <code>kpi_trades_scrubbed</code>. No order ids, no account fields.</p>
+    </section>
+    <div id="tapes" class="tapes"></div>
+  </div>
+  <div id="panel-models" hidden>
+    <section class="models-head">
+      <h2>Models</h2>
+      <p>Out-of-sample rows from <code>models_oos</code> when that scrubbed view is exported. This tab does not place orders.</p>
+    </section>
+    <div id="models"></div>
+  </div>
   <footer>
     <p>Static page. It reads <code>data/*.json</code> only and does not place orders.</p>
   </footer>
