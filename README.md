@@ -1,17 +1,17 @@
-# Agentic sleeves KPI
+# The Book
 
-Read-only dashboard for the Agentic sleeves book: **Crypto**, **Equities**, and **combined**.
+Read-only dashboard for The Book: **Crypto**, **Equities**, and **combined**.
 
 The page is static. It does not place orders, and it does not call Supabase from the browser.
 
-- Repo: https://github.com/jrg185/agentic-sleeves-kpi
-- Pages: https://jrg185.github.io/agentic-sleeves-kpi/
+- Repo: https://github.com/jrg185/the-book
+- Pages: https://jrg185.github.io/the-book/
 
 ## What the board shows
 
-For each sleeve and the combined book:
+For each desk and the combined book:
 
-- Start (the sleeve seed)
+- Start (the book seed)
 - Running balance (book): cash + mark-to-market of open positions. Until true MTM, book = start + running P&L, so the fraction is `(start + running_pnl) / start`. It is not cash left after a fill.
 - P&L in dollars and percent
 - Day P&L
@@ -21,7 +21,7 @@ For each sleeve and the combined book:
 
 Dollar figures are **seed × fraction**. The scrubbed JSON does not need raw book dollars.
 
-| Sleeve | Seed used when the row has no start/seed |
+| Desk | Seed used when the row has no start/seed |
 | --- | --- |
 | Crypto | $300 |
 | Equities | $500 |
@@ -31,7 +31,7 @@ Rails encoded in the sample (fractions of that seed):
 
 - Crypto day kill `-0.10` (−10%, −$30) and day target `0.025` (+2.5%, +$7.50, realized only)
 - Equities day kill `-0.25` (−25%, −$125)
-- Combined kill headroom `155/800` of book. The kill percent itself stays per sleeve.
+- Combined kill headroom `155/800` of book. The kill percent itself stays per desk.
 
 ## Data path
 
@@ -122,7 +122,7 @@ If the service role secret is unset, `scripts/export_kpi.py` exits 0 and leaves 
 
 Pages is a legacy site: branch `main`, path `/` (repository root). Pushing `index.html`, `styles.css`, `app.js`, and `data/*.json` to `main` publishes them. Do not switch the source to GitHub Actions.
 
-The site is https://jrg185.github.io/agentic-sleeves-kpi/
+The site is https://jrg185.github.io/the-book/
 
 ## Local preview
 
