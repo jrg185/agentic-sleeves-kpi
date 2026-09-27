@@ -73,7 +73,7 @@ The live `kpi_summary` view uses warehouse names. Export remaps them onto the pa
 | --- | --- |
 | `sleeve` | `crypto`, `equities`, or `combined` |
 | `as_of` | Snapshot timestamp |
-| `running_balance_frac` | Sleeve book ÷ seed. Interim book = start + running P&L. A value above 1 means the book is above its start (crypto sample ≈ 1.028433). |
+| `running_balance_frac` | Sleeve book ÷ seed. Sheet desks: crypto $307.13 / $300, equities $500.87 / $500, combined $808 / $800. A value above 1 means the book is above its start. |
 | `running_pnl_frac` | Running P&L ÷ seed |
 | `day_pnl_frac` | Day P&L ÷ seed, or null |
 | `day_kill_pct` | Kill rail as a fraction of book (`-0.10` = −10%). Percent points such as `-10` are also accepted. |

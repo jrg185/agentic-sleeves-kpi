@@ -108,9 +108,10 @@ def sample_bundle() -> dict:
     crypto = SEEDS["crypto"]
     equities = SEEDS["equities"]
     combined = crypto + equities
-    crypto_pnl = "8.53"
-    equities_pnl = "0"
-    combined_pnl = str(Decimal(crypto_pnl) + Decimal(equities_pnl))
+    # Sheet desks are the sleeve books. 307.13 + 500.87 = 808.
+    crypto_pnl = "7.13"
+    equities_pnl = "0.87"
+    combined_pnl = "8"
     as_of = "2026-09-27T22:06:00-04:00"
     summary = [
         {
@@ -180,7 +181,7 @@ def sample_bundle() -> dict:
         "project_ref": PROJECT_REF,
         "views": [f"public.{name}" for name in VIEWS],
         "note": (
-            "Sample snapshot. Balances are sleeve book (cash + MTM; interim start + running P&L), not cash. "
+            "Sample snapshot. Balances are sleeve book from the sheet desks (crypto $307.13, equities $500.87, combined $808), not cash. "
             "Replaced when the export Action can read the Supabase views. "
             "Dollar figures on the page are seed × fraction."
         ),

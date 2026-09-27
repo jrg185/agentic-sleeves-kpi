@@ -6,5 +6,5 @@
     "public.kpi_summary",
     "public.kpi_trades_scrubbed"
   ],
-  "note": "Sample snapshot. Balances are sleeve book (cash + MTM; interim start + running P&L), not cash. Replaced when the export Action can read the Supabase views. Dollar figures on the page are seed \u00d7 fraction."
+  "note": "Sample snapshot. Balances are sleeve book from the sheet desks (crypto $307.13, equities $500.87, combined $808), not cash. Replaced when the export Action can read the Supabase views. Dollar figures on the page are seed \u00d7 fraction."
 }

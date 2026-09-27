@@ -65,7 +65,7 @@ function fractionFrom(row, fracKeys, dollarKeys, seed, { percentPoints = false }
 
 export function deriveSleeve(row, seeds = SEEDS_USD) {
   const seed = seedFor(row, seeds);
-  // Book / start can be above 1 (crypto ~1.028). Do not treat that as percent points.
+  // Book / start can be above 1 (crypto 307.13/300). Do not treat that as percent points.
   const runningBalanceFrac = fractionFrom(
     row,
     ["running_balance_frac", "running_bal_vs_start", "balance_frac", "bal_frac", "running_bal_frac"],
