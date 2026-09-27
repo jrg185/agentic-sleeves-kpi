@@ -1,35 +1,41 @@
 [
   {
     "sleeve": "crypto",
-    "as_of": "2026-09-27T19:45:00-04:00",
-    "running_balance_frac": 1.0792333333333333,
-    "running_pnl_frac": 0.07923333333333334,
+    "as_of": "2026-09-27T19:46:00-04:00",
+    "running_balance_frac": 1.0792333333,
+    "running_pnl_frac": 0.0792333333,
+    "realized_pnl_frac": 0.0208,
+    "unrealized_pnl_frac": 0.0584333333,
     "day_pnl_frac": null,
     "day_kill_pct": -0.1,
     "kill_headroom_frac": 0.1,
     "day_target_pct": 0.025,
-    "note": "Book=start+realized+uPnL. Realized $6.24 unrealized $17.53. Full tape all outcomes."
+    "note": "Realized +$6.24 \u00b7 Unrealized ~+$17.53 \u00b7 Book $323.77. Rails % of book."
   },
   {
     "sleeve": "equities",
-    "as_of": "2026-09-27T19:45:00-04:00",
+    "as_of": "2026-09-27T19:46:00-04:00",
     "running_balance_frac": 1.00174,
     "running_pnl_frac": 0.00174,
+    "realized_pnl_frac": 0.0,
+    "unrealized_pnl_frac": 0.00174,
     "day_pnl_frac": null,
     "day_kill_pct": -0.25,
     "kill_headroom_frac": 0.25,
     "day_target_pct": null,
-    "note": "Book=cash+MTM. QCOM live fill."
+    "note": "Realized $0 \u00b7 Unrealized ~+$0.87 on QCOM \u00b7 Book $500.87."
   },
   {
     "sleeve": "combined",
-    "as_of": "2026-09-27T19:45:00-04:00",
+    "as_of": "2026-09-27T19:46:00-04:00",
     "running_balance_frac": 1.0308,
     "running_pnl_frac": 0.0308,
+    "realized_pnl_frac": 0.0078,
+    "unrealized_pnl_frac": 0.023,
     "day_pnl_frac": 0,
     "day_kill_pct": null,
     "kill_headroom_frac": 0.19375,
     "day_target_pct": null,
-    "note": "Crypto $323.77 + equities $500.87."
+    "note": "Per-sleeve kill rails. Realized vs unrealized split on sleeve cards (UI wiring in flight)."
   }
 ]
