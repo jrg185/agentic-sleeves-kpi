@@ -1,0 +1,10 @@
+{
+  "source": "sample",
+  "fetched_at": null,
+  "project_ref": "bsnqwgbshwszbjncglqx",
+  "views": [
+    "public.kpi_summary",
+    "public.kpi_trades_scrubbed"
+  ],
+  "note": "Sample snapshot in the scrubbed view shape. Replaced when the export Action can read the Supabase views. Dollar figures on the page are seed × fraction."
+}

@@ -1,0 +1,35 @@
+[
+  {
+    "sleeve": "crypto",
+    "as_of": "2026-09-27T22:06:00-04:00",
+    "running_balance_frac": -0.0230333333,
+    "running_pnl_frac": 0.0284333333,
+    "day_pnl_frac": null,
+    "day_kill_pct": -0.1,
+    "kill_headroom_frac": 0.1,
+    "day_target_pct": 0.025,
+    "note": "Day target is realized-only. Rails are percent of book."
+  },
+  {
+    "sleeve": "equities",
+    "as_of": "2026-09-27T22:06:00-04:00",
+    "running_balance_frac": 0.7,
+    "running_pnl_frac": 0.0,
+    "day_pnl_frac": null,
+    "day_kill_pct": -0.25,
+    "kill_headroom_frac": 0.25,
+    "day_target_pct": null,
+    "note": "Rails are percent of book."
+  },
+  {
+    "sleeve": "combined",
+    "as_of": "2026-09-27T22:06:00-04:00",
+    "running_balance_frac": 0.4288625,
+    "running_pnl_frac": 0.0106625,
+    "day_pnl_frac": 0,
+    "day_kill_pct": null,
+    "kill_headroom_frac": 0.19375,
+    "day_target_pct": null,
+    "note": "Per-sleeve kill rails. Crypto day target is realized-only."
+  }
+]
