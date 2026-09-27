@@ -86,7 +86,7 @@ function renderSleeve(derived, { hero = false } = {}) {
   const headroomValue = headroom.querySelector(".v");
   headroomValue.replaceChildren(
     pair(
-      derived.killHeadroomFrac == null ? "—" : `${formatPct(derived.killHeadroomFrac)} of book`,
+      derived.killHeadroomFrac == null ? "\u2014" : `${formatPct(derived.killHeadroomFrac)} of book`,
       formatUsd(derived.killHeadroom)
     )
   );
@@ -145,13 +145,13 @@ function renderTape(sleeve, trades) {
     const pnl = seed == null || trade.pnl_frac == null ? null : Math.round((seed * Number(trade.pnl_frac) + Number.EPSILON) * 100) / 100;
     const tr = el("tr");
     const side = el("td");
-    const pill = el("span", `pill ${trade.side || ""}`, trade.side || "—");
+    const pill = el("span", `pill ${trade.side || ""}`, trade.side || "\u2014");
     side.append(pill);
     const cells = [
-      el("td", null, String(trade.ts || "—")),
-      el("td", "ticker", trade.ticker || "—"),
+      el("td", null, String(trade.ts || "\u2014")),
+      el("td", "ticker", trade.ticker || "\u2014"),
       side,
-      el("td", "num", trade.qty == null ? "—" : String(trade.qty)),
+      el("td", "num", trade.qty == null ? "\u2014" : String(trade.qty)),
       el("td", `num ${tone(pnl)}`, formatUsd(pnl, { signed: true })),
       el("td", `num ${tone(shaped.runningPnl)}`, formatUsd(shaped.runningPnl, { signed: true })),
       el("td", `num ${tone(shaped.runningBalance)}`, formatUsd(shaped.runningBalance)),
@@ -202,46 +202,47 @@ function showTab(name) {
   tabModels.setAttribute("aria-selected", models ? "true" : "false");
 }
 
-function modelRows(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (payload && Array.isArray(payload.rows)) return payload.rows;
-  return [];
+function oosText(oos) {
+  if (!oos || typeof oos !== "object") return "Pending T04.";
+  const pending = oos.status === "placeholder" || (oos.hit_rate == null && oos.avg_return == null && oos.n == null);
+  if (pending) return oos.note || "Pending T04.";
+  const bits = [];
+  if (oos.window) bits.push(String(oos.window));
+  if (oos.hit_rate != null) bits.push(`hit ${oos.hit_rate}`);
+  if (oos.avg_return != null) bits.push(`avg ${oos.avg_return}`);
+  if (oos.n != null) bits.push(`n=${oos.n}`);
+  return bits.join(" \u00b7 ") || "Pending T04.";
 }
 
 function renderModels(payload) {
   modelsEl.replaceChildren();
-  const rows = modelRows(payload).filter((row) => row && typeof row === "object");
-  const note = payload && !Array.isArray(payload) ? payload.note : "";
-  if (note) modelsEl.append(el("p", "note", String(note)));
-  if (!rows.length) {
-    modelsEl.append(el("p", "empty", "No out-of-sample model rows in this snapshot."));
+  const models = payload && Array.isArray(payload.models) ? payload.models : [];
+  if (payload && payload.note) modelsEl.append(el("p", "note", String(payload.note)));
+  if (!models.length) {
+    modelsEl.append(el("p", "empty", "No model cards in data/models.json."));
     return;
   }
-  const keys = [];
-  for (const row of rows) {
-    for (const key of Object.keys(row)) {
-      if (!keys.includes(key)) keys.push(key);
+  const grid = el("div", "model-grid");
+  for (const model of models) {
+    const card = el("article", "sleeve model-card");
+    const head = el("header", "sleeve-head");
+    head.append(el("h2", null, model.name || "Model"));
+    if (model.sleeve) head.append(el("p", "fine", String(model.sleeve)));
+    card.append(head);
+    const list = el("dl");
+    const rows = [
+      ["Used", model.used],
+      ["Training", model.training],
+      ["Data", model.data_source],
+      ["OOS", oosText(model.oos)],
+    ];
+    for (const [label, value] of rows) {
+      list.append(el("dt", null, label), el("dd", null, value == null || value === "" ? "\u2014" : String(value)));
     }
+    card.append(list);
+    grid.append(card);
   }
-  const wrap = el("div", "table-wrap");
-  const table = el("table");
-  table.append(el("caption", null, "models_oos snapshot. Values are shown as exported."));
-  const head = el("tr");
-  for (const key of keys) head.append(el("th", null, key));
-  const thead = el("thead");
-  thead.append(head);
-  const tbody = el("tbody");
-  for (const row of rows) {
-    const tr = el("tr");
-    for (const key of keys) {
-      const value = row[key];
-      tr.append(el("td", null, value == null ? "—" : String(value)));
-    }
-    tbody.append(tr);
-  }
-  table.append(thead, tbody);
-  wrap.append(table);
-  modelsEl.append(wrap);
+  modelsEl.append(grid);
 }
 
 async function main() {
@@ -252,7 +253,7 @@ async function main() {
       loadJson("data/kpi_summary.json"),
       loadJson("data/kpi_trades_scrubbed.json"),
       loadJson("data/meta.json"),
-      loadJson("data/models_oos.json").catch(() => ({ rows: [], note: "models_oos.json is not in this snapshot." })),
+      loadJson("data/models.json").catch(() => ({ models: [], note: "data/models.json is not in this snapshot." })),
     ]);
     render(summary, trades, meta);
     renderModels(models);

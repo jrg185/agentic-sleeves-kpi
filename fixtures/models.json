@@ -1,0 +1,37 @@
+{
+  "as_of": "2026-09-27T22:06:00-04:00",
+  "status": "placeholder",
+  "note": "OOS metrics stay empty until T04 publishes them. Replace data/models.json; the page reads these fields.",
+  "models": [
+    {
+      "sleeve": "crypto",
+      "name": "Crypto v0 heuristic",
+      "used": "Shadow advisory for the $300 crypto sleeve. Scores 24h return, volume z, and an ATR-ish range. It does not place orders.",
+      "training": "No fit. Buy when 24h return is above +2% and volume z is above 0.5. Sell when 24h return is below -2%.",
+      "data_source": "Coinbase Exchange public hourly candles, 168 bars. 57 Robinhood USD names that also have a Coinbase product.",
+      "oos": {
+        "status": "placeholder",
+        "window": null,
+        "hit_rate": null,
+        "avg_return": null,
+        "n": null,
+        "note": "Pending T04."
+      }
+    },
+    {
+      "sleeve": "equities",
+      "name": "Equities sleeve",
+      "used": "No fitted equities model is published on this board.",
+      "training": "Not published.",
+      "data_source": "Scrubbed equities fills only. This page has no broker feed.",
+      "oos": {
+        "status": "placeholder",
+        "window": null,
+        "hit_rate": null,
+        "avg_return": null,
+        "n": null,
+        "note": "Pending T04."
+      }
+    }
+  ]
+}

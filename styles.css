@@ -102,6 +102,28 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
 .models-head h2 { margin: 0 0 4px; }
 .models-head p { margin: 0; }
 
+.model-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding-bottom: 28px;
+}
+
+.model-card h2 { margin: 0; font-size: 1.6rem; }
+.model-card dl {
+  display: grid;
+  grid-template-columns: 6.2rem 1fr;
+  gap: 10px 12px;
+  margin: 0;
+}
+.model-card dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.model-card dd { margin: 0; line-height: 1.4; }
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -266,7 +288,7 @@ footer {
 code { color: var(--ink); }
 
 @media (max-width: 860px) {
-  .top, .sleeve-grid, .tapes, .metrics { grid-template-columns: 1fr; }
+  .top, .sleeve-grid, .tapes, .metrics, .model-grid, .model-card dl { grid-template-columns: 1fr; }
   .top { padding-top: 28px; }
   .metric .v, .pair .primary { font-size: 1.2rem; }
 }
