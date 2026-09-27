@@ -1,7 +1,5 @@
 {
-  "source": "sheet",
-  "fetched_at": "2026-09-27T23:45:00Z",
-  "project_ref": "bsnqwgbshwszbjncglqx",
-  "note": "Full tape from Agentic Trading Ledger sheet. Book not cash. All outcomes kept.",
-  "trade_count": 31
+  "source": "supabase",
+  "fetched_at": "2026-09-27T19:46:00-04:00",
+  "note": "Full tape 31 fills from kpi_trades. Realized/unrealized fields on summary."
 }
