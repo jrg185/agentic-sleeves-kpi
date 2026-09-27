@@ -1,4 +1,44 @@
 {
-  "rows": [],
-  "note": "No out-of-sample model rows in this snapshot."
+  "rows": [
+    {
+      "asset_class": "equity",
+      "model": "logistic",
+      "auc": 0.4682,
+      "brier": 0.2513,
+      "n_long": 233,
+      "after_cost_mean": -0.0171,
+      "sleeve_ir_vs_spy": -1.7382,
+      "sleeve_sharpe": -0.7138,
+      "n_cohorts": 23,
+      "promoted": false,
+      "note": "pre-FRED purged WF H=10d 30bps"
+    },
+    {
+      "asset_class": "equity",
+      "model": "hist_gbt",
+      "auc": 0.4903,
+      "brier": 0.2511,
+      "n_long": 2438,
+      "after_cost_mean": 0.0038,
+      "sleeve_ir_vs_spy": -1.9167,
+      "sleeve_sharpe": -0.8408,
+      "n_cohorts": 23,
+      "promoted": false,
+      "note": "pre-FRED"
+    },
+    {
+      "asset_class": "equity",
+      "model": "lgbm",
+      "auc": 0.4952,
+      "brier": 0.2511,
+      "n_long": 2950,
+      "after_cost_mean": 0.0048,
+      "sleeve_ir_vs_spy": -1.2167,
+      "sleeve_sharpe": 0.2915,
+      "n_cohorts": 23,
+      "promoted": false,
+      "note": "pre-FRED; best IR still negative \u2014 not promoted"
+    }
+  ],
+  "updated_at": "2026-09-27T23:00:00Z"
 }
