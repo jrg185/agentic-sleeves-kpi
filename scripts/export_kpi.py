@@ -75,6 +75,14 @@ def book_frac(running_pnl: str | Decimal, seed: Decimal) -> float:
     return frac(seed + Decimal(running_pnl), seed)
 
 
+def sheet_frac(dollars: str | Decimal, seed: Decimal) -> float:
+    """Book or P&L ÷ start, rounded to 6 decimals. 323.77/300 → 1.079233."""
+    if seed == 0:
+        raise ValueError("seed is zero")
+    quant = (Decimal(dollars) / seed).quantize(Decimal("0.000001"))
+    return float(quant)
+
+
 # Live public.kpi_summary uses warehouse names. The page reads the right-hand names.
 # running_bal_vs_start is book/start and wins over a cash residual still called
 # running_balance_frac.
@@ -85,10 +93,35 @@ SUMMARY_REMAP = (
 )
 
 
+def _as_float(value):
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def replace_cash_balance(row: dict) -> dict:
+    """Turn a cash residual into book/start when the warehouse book column is absent.
+
+    Book ≈ 1 + running P&L. Cash leftovers (crypto −0.023, equities 0.7) sit below 0.95.
+    """
+    pnl = _as_float(row.get("running_pnl_frac"))
+    if pnl is None:
+        return row
+    book = float((Decimal(str(pnl)) + 1).quantize(Decimal("0.000001")))
+    bal = _as_float(row.get("running_balance_frac"))
+    if bal is None or bal < 0.95:
+        row["running_balance_frac"] = book
+    return row
+
+
 def reshape_summary_row(row: dict) -> dict:
     """Map a live kpi_summary row onto the page contract."""
     if not isinstance(row, dict):
         return row
+    had_warehouse_book = row.get("running_bal_vs_start") is not None
     out = dict(row)
     for src, dest in SUMMARY_REMAP:
         if src not in out:
@@ -96,6 +129,27 @@ def reshape_summary_row(row: dict) -> dict:
         if out[src] is not None:
             out[dest] = out[src]
         del out[src]
+    for key in ("running_balance_frac", "running_pnl_frac"):
+        value = _as_float(out.get(key))
+        if value is not None:
+            out[key] = float(Decimal(str(value)).quantize(Decimal("0.000001")))
+    if not had_warehouse_book:
+        out = replace_cash_balance(out)
+    return out
+
+
+def reshape_trade_row(row: dict) -> dict:
+    """Fill running_balance_frac is book at that fill, not cash left over."""
+    if not isinstance(row, dict):
+        return row
+    out = dict(row)
+    pnl = _as_float(out.get("running_pnl_frac"))
+    if pnl is None:
+        return out
+    book = float((Decimal(str(pnl)) + 1).quantize(Decimal("0.000001")))
+    bal = _as_float(out.get("running_balance_frac"))
+    if bal is None or bal < 0.95:
+        out["running_balance_frac"] = book
     return out
 
 
@@ -108,28 +162,29 @@ def sample_bundle() -> dict:
     crypto = SEEDS["crypto"]
     equities = SEEDS["equities"]
     combined = crypto + equities
-    # Sheet desks are the sleeve books. 307.13 + 500.87 = 808.
-    crypto_pnl = "7.13"
+    # Crypto Desk rebuild: book 323.77 = start 300 + 23.77 (realized +6.24 plus uPnL).
+    # Equities book stays 500.87. Combined 323.77 + 500.87 = 824.64.
+    crypto_pnl = "23.77"
     equities_pnl = "0.87"
-    combined_pnl = "8"
+    combined_pnl = "24.64"
     as_of = "2026-09-27T22:06:00-04:00"
     summary = [
         {
             "sleeve": "crypto",
             "as_of": as_of,
-            "running_balance_frac": book_frac(crypto_pnl, crypto),
-            "running_pnl_frac": frac(crypto_pnl, crypto),
+            "running_balance_frac": sheet_frac("323.77", crypto),
+            "running_pnl_frac": sheet_frac(crypto_pnl, crypto),
             "day_pnl_frac": None,
             "day_kill_pct": -0.10,
             "kill_headroom_frac": frac("30", crypto),
             "day_target_pct": 0.025,
-            "note": "Day target is realized-only. Rails are percent of book.",
+            "note": "Realized +$6.24. Book is start + realized + uPnL. Day target is realized-only.",
         },
         {
             "sleeve": "equities",
             "as_of": as_of,
-            "running_balance_frac": book_frac(equities_pnl, equities),
-            "running_pnl_frac": frac(equities_pnl, equities),
+            "running_balance_frac": sheet_frac("500.87", equities),
+            "running_pnl_frac": sheet_frac(equities_pnl, equities),
             "day_pnl_frac": None,
             "day_kill_pct": -0.25,
             "kill_headroom_frac": frac("125", equities),
@@ -139,8 +194,8 @@ def sample_bundle() -> dict:
         {
             "sleeve": "combined",
             "as_of": as_of,
-            "running_balance_frac": book_frac(combined_pnl, combined),
-            "running_pnl_frac": frac(combined_pnl, combined),
+            "running_balance_frac": sheet_frac("824.64", combined),
+            "running_pnl_frac": sheet_frac(combined_pnl, combined),
             "day_pnl_frac": 0,
             "day_kill_pct": None,
             "kill_headroom_frac": frac("155", combined),
@@ -171,7 +226,7 @@ def sample_bundle() -> dict:
                 "qty": qty,
                 "pnl_frac": frac(pnl, seed),
                 "running_pnl_frac": frac(run_pnl, seed),
-                "running_balance_frac": book_frac(run_pnl, seed),
+                "running_balance_frac": sheet_frac(seed + Decimal(run_pnl), seed),
                 "why": why,
             }
         )
@@ -181,7 +236,7 @@ def sample_bundle() -> dict:
         "project_ref": PROJECT_REF,
         "views": [f"public.{name}" for name in VIEWS],
         "note": (
-            "Sample snapshot. Balances are sleeve book from the sheet desks (crypto $307.13, equities $500.87, combined $808), not cash. "
+            "Sample snapshot. Balances are sleeve book from the sheet desks (crypto $323.77, realized +$6.24; equities $500.87; combined $824.64), not cash. "
             "Replaced when the export Action can read the Supabase views. "
             "Dollar figures on the page are seed × fraction."
         ),
@@ -426,6 +481,7 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
     for view in VIEWS:
         rows[view] = load_view(base_url, key, db_url, view)
     rows["kpi_summary"] = [reshape_summary_row(row) for row in rows["kpi_summary"]]
+    rows["kpi_trades_scrubbed"] = [reshape_trade_row(row) for row in rows["kpi_trades_scrubbed"]]
     missing = []
     for view in OPTIONAL_VIEWS:
         try:

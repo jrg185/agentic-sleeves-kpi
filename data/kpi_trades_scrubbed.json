@@ -7,7 +7,7 @@
     "qty": 0.1031,
     "pnl_frac": 0.0132666667,
     "running_pnl_frac": 0.0132666667,
-    "running_balance_frac": 1.0132666667,
+    "running_balance_frac": 1.013267,
     "why": "+15% scale"
   },
   {
@@ -40,7 +40,7 @@
     "qty": 443.1,
     "pnl_frac": 0.0061666667,
     "running_pnl_frac": 0.0267666667,
-    "running_balance_frac": 1.0267666667,
+    "running_balance_frac": 1.026767,
     "why": "+15% scale"
   },
   {
@@ -51,7 +51,7 @@
     "qty": 15.13,
     "pnl_frac": 0.0016666667,
     "running_pnl_frac": 0.0284333333,
-    "running_balance_frac": 1.0284333333,
+    "running_balance_frac": 1.028433,
     "why": "rotation"
   },
   {
@@ -62,7 +62,7 @@
     "qty": 4.93,
     "pnl_frac": 0.0,
     "running_pnl_frac": 0.0284333333,
-    "running_balance_frac": 1.0284333333,
+    "running_balance_frac": 1.028433,
     "why": "rotation"
   },
   {
@@ -73,7 +73,7 @@
     "qty": 149.5,
     "pnl_frac": 0.0,
     "running_pnl_frac": 0.0284333333,
-    "running_balance_frac": 1.0284333333,
+    "running_balance_frac": 1.028433,
     "why": "rotation"
   },
   {

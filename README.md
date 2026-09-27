@@ -50,9 +50,7 @@ GitHub Actions reads these scrubbed views and writes JSON into the repo:
 
 Pages serves that committed JSON. The browser only fetches `data/*.json`.
 
-Workflow source: [`scripts/export-kpi.yml`](scripts/export-kpi.yml)
-
-GitHub only runs a workflow from `.github/workflows/`. Copy that file to `.github/workflows/export-kpi.yml` with a token that can write workflow files, then run **Actions → Export KPI**.
+Workflow source: [`scripts/export-kpi.yml`](scripts/export-kpi.yml). GitHub only runs a workflow from `.github/workflows/`. That copy is not registered yet.
 
 - `workflow_dispatch`, and also when the workflow file or exporter script is pushed to `main`
 - Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from Actions secrets
@@ -73,7 +71,7 @@ The live `kpi_summary` view uses warehouse names. Export remaps them onto the pa
 | --- | --- |
 | `sleeve` | `crypto`, `equities`, or `combined` |
 | `as_of` | Snapshot timestamp |
-| `running_balance_frac` | Sleeve book ÷ seed. Sheet desks: crypto $307.13 / $300, equities $500.87 / $500, combined $808 / $800. A value above 1 means the book is above its start. |
+| `running_balance_frac` | Sleeve book ÷ seed. Sheet desks: crypto 1.079233 ($323.77 / $300, realized +$6.24), equities 1.00174 ($500.87 / $500), combined 1.0308 ($824.64 / $800). |
 | `running_pnl_frac` | Running P&L ÷ seed |
 | `day_pnl_frac` | Day P&L ÷ seed, or null |
 | `day_kill_pct` | Kill rail as a fraction of book (`-0.10` = −10%). Percent points such as `-10` are also accepted. |

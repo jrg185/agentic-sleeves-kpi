@@ -2,13 +2,13 @@
   {
     "sleeve": "crypto",
     "as_of": "2026-09-27T22:06:00-04:00",
-    "running_balance_frac": 1.0237666667,
-    "running_pnl_frac": 0.0237666667,
+    "running_balance_frac": 1.079233,
+    "running_pnl_frac": 0.079233,
     "day_pnl_frac": null,
     "day_kill_pct": -0.1,
     "kill_headroom_frac": 0.1,
     "day_target_pct": 0.025,
-    "note": "Day target is realized-only. Rails are percent of book."
+    "note": "Realized +$6.24. Book is start + realized + uPnL. Day target is realized-only."
   },
   {
     "sleeve": "equities",
@@ -24,8 +24,8 @@
   {
     "sleeve": "combined",
     "as_of": "2026-09-27T22:06:00-04:00",
-    "running_balance_frac": 1.01,
-    "running_pnl_frac": 0.01,
+    "running_balance_frac": 1.0308,
+    "running_pnl_frac": 0.0308,
     "day_pnl_frac": 0,
     "day_kill_pct": null,
     "kill_headroom_frac": 0.19375,
