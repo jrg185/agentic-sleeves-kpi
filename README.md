@@ -56,7 +56,9 @@ GitHub only runs a workflow from `.github/workflows/`. Copy that file to `.githu
 
 - `workflow_dispatch`, and also when the workflow file or exporter script is pushed to `main`
 - Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from Actions secrets
-- Writes `data/*.json` and commits the JSON when it changed
+- Writes `data/kpi_summary.json`, `data/kpi_trades_scrubbed.json`, `data/models_oos.json`, and `data/meta.json` when they changed
+- Does not read `ALPHA_VANTAGE_API_KEY` or `FINNHUB_API_KEY`
+- Does not rewrite `data/models.json`
 - Does not deploy Pages and does not change the Pages source
 
 There is no Sheets API key and no Google CSV export in this path. A sheet may feed Supabase somewhere else; this site does not.
@@ -101,16 +103,18 @@ The Models tab reads `data/models.json` (same shape in `fixtures/models.json`). 
 
 ### Secrets
 
-Until both Actions secrets are set, the site ships the sample in `data/` (same bytes as `fixtures/`). `meta.json` says `"source": "sample"`.
+Until `SUPABASE_SERVICE_ROLE_KEY` is set, the site ships the sample in `data/` (same bytes as `fixtures/`). `meta.json` says `"source": "sample"`.
 
 Add these repository secrets (Settings → Secrets and variables → Actions). Do not commit them. Do not put them in client JavaScript.
 
 | Secret | Use |
 | --- | --- |
 | `SUPABASE_URL` | `https://bsnqwgbshwszbjncglqx.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | PostgREST `GET /rest/v1/<view>?select=*` with `apikey` and `Authorization: Bearer`. Used for `kpi_summary`, `kpi_trades_scrubbed`, and `models_oos` when that view exists. |
+| `SUPABASE_SERVICE_ROLE_KEY` | PostgREST `GET /rest/v1/<view>?select=*` with `apikey` and `Authorization: Bearer`. Used for `kpi_summary`, `kpi_trades_scrubbed`, and `models_oos` when that view exists. Set this the same way as the other Actions secrets. Until it is set, the board keeps the committed sample. |
 
-After the secrets are saved, run **Actions → Export KPI → Run workflow**. A successful export sets `meta.source` to `supabase` and replaces `data/*.json`. `fixtures/` stays the sample.
+`ALPHA_VANTAGE_API_KEY` and `FINNHUB_API_KEY` are already on this repository. Export KPI does not read them.
+
+After the Supabase secrets are saved, run **Actions → Export KPI → Run workflow**. A successful export sets `meta.source` to `supabase` and replaces the KPI JSON. `fixtures/` and `data/models.json` stay as they are.
 
 If the service role secret is unset, `scripts/export_kpi.py` exits 0 and leaves the committed JSON alone.
 
