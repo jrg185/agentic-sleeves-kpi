@@ -54,9 +54,9 @@ Pages serves that committed JSON. The browser only fetches `data/*.json`.
 
 Workflow: [`.github/workflows/export-kpi.yml`](.github/workflows/export-kpi.yml) (same bytes as [`scripts/export-kpi.yml`](scripts/export-kpi.yml)).
 
-- `workflow_dispatch`, pull requests (position math and the RH fill mapper), and pushes to `main` other than `data/**`
-- schedule: every 15 minutes on weekdays from 13:00–21:45 UTC (covers 9:30am–4:00pm ET in both EDT and EST), and hourly outside that window including weekends
-- When a fills feed is present, upsert it into `public.kpi_trades`, then refresh `kpi_sleeve_snapshots` and export. No feed skips the upsert and Export KPI continues. A bad requested feed, or a failed refresh, does not commit KPI JSON
+- `workflow_dispatch`, `repository_dispatch` type `rh-fill`, pull requests (position math and the RH fill mapper), and pushes to `main` other than `data/**`
+- schedule: mark refresh every 15 minutes on weekdays from 13:00–21:45 UTC (covers 9:30am–4:00pm ET in both EDT and EST), and hourly outside that window including weekends. This cron does not poll Robinhood
+- An on-fill payload is written to a temp file and upserted into `public.kpi_trades`, then the same run refreshes `kpi_sleeve_snapshots` and exports. The schedule has no payload, so it skips the upsert. A bad requested payload, or a failed refresh, does not commit KPI JSON
 - Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. `SUPABASE_DB_URL` is optional
 - Crypto marks: public Coinbase ticker, then Yahoo `{SYMBOL}-USD`. Equities marks: Finnhub when `FINNHUB_API_KEY` is set, then Yahoo chart. CoinStats and Alpha Vantage are later fallbacks when those keys are set
 - Writes `data/kpi_summary.json`, `data/kpi_trades_scrubbed.json`, `data/models_oos.json`, and `data/meta.json` when they changed
@@ -73,7 +73,7 @@ The writer is in this repo: `scripts/refresh_kpi_snapshots.py`. Export KPI runs 
 
 Order:
 
-1. When a fills feed is present, sync inserts new Robinhood fills into `kpi_trades`. With no feed, this step skips.
+1. When a desk sends a fill, sync inserts it into `kpi_trades`. The mark-refresh schedule skips this step.
 2. Refresh inserts `kpi_sleeve_snapshots`.
 3. Export reads `kpi_summary` and `kpi_trades_scrubbed` and commits JSON only if `as_of` is within 15 minutes.
 4. Pages shows that `as_of`.
@@ -139,11 +139,42 @@ Add these repository secrets (Settings → Secrets and variables → Actions). D
 | `COINSTATS_API_KEY` | Optional crypto mark after Coinbase and Yahoo. |
 | `ALPHA_VANTAGE_API_KEY` | Optional equities mark after Finnhub and Yahoo. |
 
-Public Coinbase and Yahoo marks do not need those quote keys. There is no Robinhood secret on this Action. `ROBINHOOD_TOKEN` is not required and is not read.
+Public Coinbase and Yahoo marks do not need those quote keys. There is no Robinhood secret on this Action.
 
-### RH fill sync (path B)
+### RH fill ingest
 
-Standing ingest is outside Actions. About every 15 minutes, Crypto Desk or Wags polls Robinhood Trading MCP, dumps filled orders to JSON, upserts `public.kpi_trades`, then runs **Actions → Export KPI → Run workflow**.
+Robinhood has no fill webhook. The standing path is desk-detected fill, then this ingest workflow, then the upsert, then Export KPI. The `*/15` schedule only refreshes marks. It does not poll Robinhood.
+
+Call this immediately when `place_*` returns filled, or when the desk's own poller sees a new filled order id. Crypto sends crypto fills. Equities Desk sends equity fills the same way.
+
+```bash
+gh api repos/jrg185/the-book/dispatches --method POST --input - <<'JSON'
+{
+  "event_type": "rh-fill",
+  "client_payload": {
+    "id": "11111111-1111-4111-8111-111111111111",
+    "currency_code": "GRT",
+    "side": "buy",
+    "state": "filled",
+    "cumulative_quantity": "100",
+    "average_price": "0.05",
+    "rounded_executed_notional": "5",
+    "fee": "0.01",
+    "created_at": "2026-09-28T18:00:00Z"
+  }
+}
+JSON
+```
+
+`client_payload` must be a JSON object. One order, `{"results":[...]}`, or `{"data":{"results":[...]}}` all work. A list is not valid as `client_payload`. Use the workflow input for a list:
+
+```bash
+gh workflow run export-kpi.yml --repo jrg185/the-book -f sync_rh_json="$(cat fills.json)"
+```
+
+The Action writes that payload to `/tmp/rh-fill.json` and runs `scripts/sync_rh_kpi_trades.py --from-json`. The same run then refreshes sleeve snapshots and exports. USDC and funding pairs are skipped. `sleeve` is `crypto` or `equities` from `asset_class` (a bare equity symbol also maps to `equities`). An object with `"asset_class": "equity"` and `"symbol": "QCOM"` is sleeve `equities`. Extra MCP fields and account numbers are not written.
+
+A local upsert, without Actions, is the same mapper:
 
 ```bash
 python3 scripts/sync_rh_kpi_trades.py --from-json fills.json
@@ -151,19 +182,7 @@ python3 scripts/sync_rh_kpi_trades.py --from-json fills.json
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` perform that upsert. `SUPABASE_DB_URL` is optional and is not on the repo today. REST is enough after the SQL below has been applied. The same upsert is `POST /rest/v1/kpi_trades?on_conflict=order_id` with `Prefer: resolution=ignore-duplicates`.
 
-Export KPI runs `scripts/sync_rh_kpi_trades.py` before the snapshot refresh only when a feed is present: the `sync_rh_json` workflow input, `SYNC_RH_JSON`, `RH_FILLS_PATH`, or `data/rh_fills.json`. USDC and funding pairs are skipped. `sleeve` is `crypto` or `equities` from `asset_class` (a bare equity symbol also maps to `equities`). Crypto's 15-minute poller feeds crypto fills only. Equities Desk owns equity fills later. There is no on-fill webhook. The script does not call Robinhood.
-
-No feed, and a missing `ROBINHOOD_TOKEN`, both skip with exit 0. Export KPI still refreshes and exports. The pull-request check only runs `--self-test`. If a feed was requested and the JSON is bad, the sync exits 1 and stamps `data/meta.json` (**Export failed**).
-
-`--from-json` accepts a list, `{"results": [...]}`, or an MCP envelope `{"data": {"results": [...]}}`. The field list is the docstring at the top of `scripts/sync_rh_kpi_trades.py`. Account numbers in that envelope are not written. Crypto can feed tonight's MCP fills like this:
-
-```bash
-python3 scripts/sync_rh_kpi_trades.py --from-json - <<'JSON'
-{"data":{"results":[{"id":"11111111-1111-4111-8111-111111111111","currency_code":"GRT","side":"buy","state":"filled","cumulative_quantity":"100","average_price":"0.05","rounded_executed_notional":"5","fee":"0.01","created_at":"2026-09-28T18:00:00Z"}]}}
-JSON
-```
-
-That row is sleeve `crypto`, ticker `GRT`. An object with `"asset_class": "equity"` and `"symbol": "QCOM"` is sleeve `equities` instead. Extra MCP fields are ignored.
+The pull-request check only runs `--self-test`. If a fill was sent and the JSON is bad, the sync exits 1 and stamps `data/meta.json` (**Export failed**). A scheduled run with no payload skips the sync and still refreshes.
 
 Apply [`scripts/migrate_kpi_trades_order_id.sql`](scripts/migrate_kpi_trades_order_id.sql) before the first upsert. It adds nullable `order_id text`, copies uuids out of `RH Agentic backfill order <uuid>` / `RH Agentic sync order <uuid>`, and creates a unique index. When `SUPABASE_DB_URL` is set, the sync runs that file itself. Upserts are `ON CONFLICT (order_id) DO NOTHING`.
 
@@ -171,7 +190,7 @@ Apply [`scripts/migrate_kpi_trades_order_id.sql`](scripts/migrate_kpi_trades_ord
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/migrate_kpi_trades_order_id.sql
 ```
 
-After the migration is applied, a new Agentic crypto fill shows on https://jrg185.github.io/the-book/ once the MCP routine has upserted it and Export KPI has run: within one schedule window after that dispatch (15 minutes on the cash-session cron, otherwise hourly).
+After the migration is applied, send the fill with `gh api .../dispatches` or `gh workflow run`. That run upserts, refreshes, and exports, so the fill shows on https://jrg185.github.io/the-book/ when the workflow finishes. The 15-minute cron does not wait for Robinhood.
 
 After the Supabase secrets are saved, run **Actions → Export KPI → Run workflow**. A successful export sets `meta.source` to `supabase` and replaces the KPI JSON. `fixtures/` and `data/models.json` stay as they are.
 

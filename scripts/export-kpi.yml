@@ -1,12 +1,14 @@
 name: Export KPI
 
 # Refreshes public.kpi_sleeve_snapshots, then reads the scrubbed views.
-# Path B: this Action does not call Robinhood and does not read ROBINHOOD_TOKEN.
-# The kpi_trades sync runs only when a fills feed is present (workflow_dispatch
-# input sync_rh_json, SYNC_RH_JSON, RH_FILLS_PATH, or data/rh_fills.json).
-# No feed, including a missing ROBINHOOD_TOKEN, skips that step with exit 0.
-# A requested feed that will not parse exits non-zero and stamps data/meta.json.
-# A failed refresh does the same. Pull requests only self-test.
+# Robinhood has no fill webhook. This Action does not poll Robinhood.
+# On-fill ingest: repository_dispatch rh-fill, or workflow_dispatch input
+# sync_rh_json. The step writes that JSON to a temp file, upserts kpi_trades,
+# then continues with refresh and export.
+# The schedule is mark refresh only. It does not poll Robinhood. With no fill
+# payload the sync step exits 0. A requested payload that will not parse
+# exits non-zero and stamps data/meta.json. A failed refresh does the same.
+# Pull requests only self-test.
 # Sleeve is crypto or equities from asset class. USDC and funding are skipped.
 # Marks: public Coinbase ticker (crypto) and Yahoo chart (equities).
 # FINNHUB_API_KEY, COINSTATS_API_KEY, and ALPHA_VANTAGE_API_KEY are optional.
@@ -14,6 +16,7 @@ name: Export KPI
 
 on:
   schedule:
+    # Mark refresh only. This cron does not poll Robinhood.
     # US cash session in both EDT and EST (about 9:30am–5:00pm ET), every 15 minutes.
     - cron: "*/15 13-21 * * 1-5"
     # Hourly outside that window, including weekends, so the crypto sleeve does not sit overnight.
@@ -27,10 +30,12 @@ on:
   workflow_dispatch:
     inputs:
       sync_rh_json:
-        description: "Optional fills JSON or a path to it. Empty skips the RH sync. ROBINHOOD_TOKEN is not used."
+        description: "On-fill JSON (one order, a list, or results/data). Empty skips the sync. This Action does not poll Robinhood."
         required: false
         type: string
         default: ""
+  repository_dispatch:
+    types: [rh-fill]
 
 permissions:
   contents: write
@@ -60,19 +65,60 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Stage on-fill JSON
+        id: stage
+        env:
+          SYNC_RH_JSON: ${{ github.event.inputs.sync_rh_json }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+
+          dest = Path("/tmp/rh-fill.json")
+          name = os.environ.get("GITHUB_EVENT_NAME") or ""
+          raw = os.environ.get("SYNC_RH_JSON") or ""
+          output = os.environ.get("GITHUB_OUTPUT")
+
+          def publish(path: str) -> None:
+              if output:
+                  with open(output, "a", encoding="utf-8") as handle:
+                      handle.write(f"feed={path}\n")
+              print(f"staged {path}")
+
+          if name == "repository_dispatch":
+              event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+              client = event.get("client_payload")
+              if not isinstance(client, dict) or not client:
+                  sys.exit("rh-fill dispatch needs a client_payload object. kpi_trades was not changed.")
+              dest.write_text(json.dumps(client), encoding="utf-8")
+              publish(str(dest))
+          elif raw.strip():
+              text = raw.strip()
+              if text[0] in "{[":
+                  dest.write_text(raw, encoding="utf-8")
+                  publish(str(dest))
+              else:
+                  publish(text)
+          elif os.environ.get("RH_FILLS_PATH"):
+              publish(os.environ["RH_FILLS_PATH"])
+          elif Path("data/rh_fills.json").is_file():
+              publish("data/rh_fills.json")
+          else:
+              print("No fill payload. Scheduled Export KPI does not poll Robinhood.")
+              if output:
+                  with open(output, "a", encoding="utf-8") as handle:
+                      handle.write("feed=\n")
+          PY
+
       - name: Sync RH fills into kpi_trades
+        if: steps.stage.outputs.feed != ''
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          SYNC_RH_JSON: ${{ github.event.inputs.sync_rh_json }}
         run: |
           python3 scripts/sync_rh_kpi_trades.py --self-test
-          if [ -n "${SYNC_RH_JSON}" ] || [ -n "${RH_FILLS_PATH:-}" ] || [ -f data/rh_fills.json ]; then
-            python3 scripts/sync_rh_kpi_trades.py
-          else
-            echo "No RH fills feed. ROBINHOOD_TOKEN is absent and is not required. Skipping kpi_trades sync."
-          fi
+          python3 scripts/sync_rh_kpi_trades.py --from-json "${{ steps.stage.outputs.feed }}"
 
       - name: Refresh kpi_sleeve_snapshots
         env:

@@ -1,14 +1,26 @@
 #!/usr/bin/env python3
 """Upsert filled Robinhood crypto orders into public.kpi_trades.
 
-Path B. Crypto Desk or Wags polls Robinhood Trading MCP about every 15 minutes,
-dumps filled orders to JSON, and runs this script. Then they workflow_dispatch
-Export KPI on jrg185/the-book. This file does not call Robinhood. It does not
-read ROBINHOOD_TOKEN. That token is not a merge requirement, and Actions has
-no Robinhood REST secret.
+Robinhood has no fill webhook. Official tools are poll-based, and this
+Action does not poll them. There is no Robinhood REST secret and this script
+does not read ROBINHOOD_TOKEN.
 
-If no fills feed is present, this script exits 0. Export KPI continues.
-A missing ROBINHOOD_TOKEN is that skip, not a failure. Fail-loud (exit 1 and
+Standing path: a desk detects a fill (place_* returned filled, or the desk's
+own poller saw a new filled order id) and immediately sends that JSON here.
+Export KPI writes it to a temp file, upserts kpi_trades, then refreshes and
+exports. Call either of these. Do not wait for the mark-refresh cron.
+
+  gh api repos/jrg185/the-book/dispatches --method POST --input - <<'JSON'
+  {"event_type":"rh-fill","client_payload":{"id":"<uuid>","currency_code":"GRT","side":"buy","state":"filled","cumulative_quantity":"100","average_price":"0.05","created_at":"2026-09-28T18:00:00Z"}}
+  JSON
+
+  gh workflow run export-kpi.yml --repo jrg185/the-book -f sync_rh_json="$(cat fills.json)"
+
+client_payload must be an object. A list is valid for --from-json and for
+sync_rh_json. The mark-refresh schedule has no payload, so that run skips
+this script with exit 0 and does not call Robinhood.
+
+If no fills feed is present, this script exits 0. Fail-loud (exit 1 and
 stamp data/meta.json) only when a feed was explicitly requested and the input
 or the upsert cannot be applied.
 
@@ -16,14 +28,14 @@ USDC and funding pairs are skipped. Sleeve is classified, not hardcoded:
 explicit asset_class or instrument_type equity/stock/equities writes
 sleeve "equities"; crypto writes "crypto". With no asset class, currency_code
 or a BASE-QUOTE symbol is crypto, and a bare symbol such as QCOM is equities.
-Crypto's 15-minute poller feeds crypto fills only. Equities Desk owns equity
-fills later. There is no on-fill webhook. No orders are placed.
+No orders are placed.
 
 --from-json schema. PATH is a file, or - for stdin. SYNC_RH_JSON is the same
 document, either raw JSON or a file path. RH_FILLS_PATH and data/rh_fills.json
 are the same document. The JSON value is one of:
 
-  [ order, ... ]
+  { order }                          one fill, including client_payload
+  [ order, ... ]                     --from-json and sync_rh_json only
   {"results": [ order, ... ]}
   {"data": {"results": [ order, ... ]}}
   {"data": [ order, ... ]}
@@ -85,8 +97,8 @@ Supabase, same project as refresh and export:
   python3 scripts/sync_rh_kpi_trades.py --dry-run --from-json fills.json
   python3 scripts/sync_rh_kpi_trades.py --from-json -
 
-Example the crypto poller can pass. Extra MCP fields are ignored. This buy
-maps to sleeve crypto, ticker GRT, pnl_trade_usd 0:
+Example a desk can send the moment a GRT buy fills. Extra MCP fields are
+ignored. This buy maps to sleeve crypto, ticker GRT, pnl_trade_usd 0:
 
   {
     "data": {
@@ -106,8 +118,8 @@ maps to sleeve crypto, ticker GRT, pnl_trade_usd 0:
     }
   }
 
-An equity fill in the same feed maps to sleeve equities instead of being
-dropped. Crypto's poller does not send these tonight:
+An equity fill in the same payload maps to sleeve equities. Equities Desk
+sends these the same way when it detects a fill:
 
   {
     "id": "77777777-7777-4777-8777-777777777777",
@@ -450,7 +462,7 @@ def rows_from_orders(orders: list[dict], existing: list[dict]) -> list[dict]:
 
 
 def orders_from_payload(payload) -> list[dict]:
-    """Accept a list, a results page, or a Robinhood MCP envelope."""
+    """Accept one order, a list, a results page, or a Robinhood MCP envelope."""
     if isinstance(payload, list):
         return [item for item in payload if isinstance(item, dict)]
     if isinstance(payload, dict):
@@ -462,7 +474,9 @@ def orders_from_payload(payload) -> list[dict]:
             return [item for item in data["results"] if isinstance(item, dict)]
         if isinstance(data, list):
             return [item for item in data if isinstance(item, dict)]
-    raise SyncError("fills JSON must be a list or an object with results")
+        if payload.get("id"):
+            return [payload]
+    raise SyncError("fills JSON must be one order, a list, or an object with results")
 
 
 def load_fills(source: str) -> list[dict]:
@@ -723,10 +737,7 @@ def sync(
 ) -> int:
     env = env_values() if env is None else env
     if not feed_requested(env, from_json, default_feed):
-        print(
-            "rh sync skipped: no fills feed. "
-            "ROBINHOOD_TOKEN is not required and its absence does not fail Export KPI."
-        )
+        print("rh sync skipped: no fill payload. This run does not poll Robinhood.")
         return 0
     orders = load_requested_orders(env, from_json, default_feed)
     if not (env.get("SUPABASE_SERVICE_ROLE_KEY") or env.get("SUPABASE_DB_URL")):
@@ -924,6 +935,22 @@ def self_test() -> int:
     )
     if len(envelope) != len(fixture_orders()):
         raise SyncError("MCP envelope was not unwrapped")
+    one = orders_from_payload(
+        {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "currency_code": "GRT",
+            "side": "buy",
+            "state": "filled",
+            "cumulative_quantity": "100",
+            "average_price": "0.05",
+            "created_at": "2026-09-28T18:00:00Z",
+        }
+    )
+    if len(one) != 1 or one[0].get("currency_code") != "GRT":
+        raise SyncError("single fill object was not accepted")
+    mapped_one = rows_from_orders(one, [])
+    if len(mapped_one) != 1 or mapped_one[0]["sleeve"] != "crypto" or mapped_one[0]["ticker"] != "GRT":
+        raise SyncError("single fill did not map to crypto GRT")
     leaked = json.dumps(rows_from_orders(envelope, existing))
     if "SHOULD_NOT_LEAK" in leaked:
         raise SyncError("account number leaked into a kpi_trades row")
@@ -938,6 +965,13 @@ def self_test() -> int:
     rest_needles = ("trading." + "robinhood.com", "RH_" + "API_KEY", "def sign_" + "message", "x-api-" + "key")
     if any(needle in source for needle in rest_needles):
         raise SyncError("script still contains a Robinhood REST client")
+    workflow = (ROOT / ".github" / "workflows" / "export-kpi.yml").read_text(encoding="utf-8")
+    if "repository_dispatch:" not in workflow or "rh-fill" not in workflow:
+        raise SyncError("export workflow has no rh-fill ingest")
+    if "does not poll Robinhood" not in workflow:
+        raise SyncError("export workflow does not say the schedule skips Robinhood")
+    if "ROBINHOOD_TOKEN:" in workflow:
+        raise SyncError("export workflow requires a Robinhood token")
     absent = Path("/no/such/rh_fills.json")
     if feed_requested({}, None, absent):
         raise SyncError("missing feed looked requested")
