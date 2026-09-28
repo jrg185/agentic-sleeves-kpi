@@ -68,7 +68,7 @@ class ExportStatusTests(unittest.TestCase):
         )
         self.assertEqual(status, "error")
         self.assertEqual(warehouse, "read-only")
-        self.assertIn("warehouse read-only \u2014 snapshot frozen at", message)
+        self.assertIn("warehouse read-only — snapshot frozen at", message)
         self.assertIn(frozen, message)
 
         status, message, warehouse = export_kpi.classify_failure(
@@ -76,7 +76,7 @@ class ExportStatusTests(unittest.TestCase):
             frozen,
         )
         self.assertEqual(warehouse, "disk-full")
-        self.assertIn("warehouse disk full \u2014 snapshot frozen at", message)
+        self.assertIn("warehouse disk full — snapshot frozen at", message)
         self.assertNotIn("323.77", message)
 
     def test_missing_credentials_stamp_meta_only(self):
