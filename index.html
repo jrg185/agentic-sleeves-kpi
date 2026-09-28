@@ -18,6 +18,11 @@
       <h1>KPI board</h1>
     </div>
     <p class="lede">Crypto, Equities, and the combined book. Read-only. Dollars on this page are the book seed times the fraction in the scrubbed snapshot.</p>
+    <nav class="repo-links" aria-label="Source repositories">
+      <a href="https://github.com/jrg185/the-book" target="_blank" rel="noopener">The Book repo</a>
+      <a href="https://github.com/jrg185/agentic-crypto-signals" target="_blank" rel="noopener">Crypto signals</a>
+      <a href="https://github.com/jrg185/agentic-equity-signals" target="_blank" rel="noopener">Equity signals</a>
+    </nav>
   </header>
   <nav class="tabs" aria-label="Board sections">
     <button type="button" id="tab-sleeves" aria-selected="true">Book</button>
@@ -30,7 +35,7 @@
     <main id="board"></main>
     <section class="tapes-head">
       <h2>Scrubbed fills</h2>
-      <p>Trade tape from <code>kpi_trades_scrubbed</code>. No order ids, no account fields.</p>
+      <p>Trade tape from <code>kpi_trades_scrubbed</code>. Account fields stay off this page.</p>
     </section>
     <div id="tapes" class="tapes"></div>
   </div>
@@ -43,6 +48,11 @@
   </div>
   <footer>
     <p>Static page. It reads <code>data/*.json</code> only and does not place orders.</p>
+    <nav class="repo-links" aria-label="Source repositories">
+      <a href="https://github.com/jrg185/the-book" target="_blank" rel="noopener">The Book repo</a>
+      <a href="https://github.com/jrg185/agentic-crypto-signals" target="_blank" rel="noopener">Crypto signals</a>
+      <a href="https://github.com/jrg185/agentic-equity-signals" target="_blank" rel="noopener">Equity signals</a>
+    </nav>
   </footer>
   <noscript>This board needs JavaScript to read the committed JSON snapshot.</noscript>
   <script type="module" src="app.js"></script>
