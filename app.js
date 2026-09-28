@@ -8,6 +8,7 @@ import {
   sortSleeves,
   tone,
 } from "./derive.js";
+import { csvFilename, linkSegments, preferredWhy, tapeCsv, tapeOpenKey } from "./tape.js";
 
 const statusEl = document.querySelector("#status");
 const boardEl = document.querySelector("#board");
@@ -288,14 +289,145 @@ function tradeStamp(trade) {
   return trade?.timestamp_et || trade?.ts || "";
 }
 
+function storedTapeOpen(sleeve) {
+  try {
+    const value = localStorage.getItem(tapeOpenKey(sleeve));
+    if (value === "closed") return false;
+    if (value === "open") return true;
+  } catch {
+    /* localStorage can throw in private mode. Default to open. */
+  }
+  return true;
+}
+
+function storeTapeOpen(sleeve, open) {
+  try {
+    localStorage.setItem(tapeOpenKey(sleeve), open ? "open" : "closed");
+  } catch {
+    /* Ignore quota and private-mode failures. The toggle still works this visit. */
+  }
+}
+
+function fillLinked(parent, text, sleeve) {
+  for (const part of linkSegments(text, sleeve)) {
+    if (part.type === "link") {
+      const anchor = document.createElement("a");
+      anchor.href = part.href;
+      anchor.target = "_blank";
+      anchor.rel = "noopener";
+      anchor.textContent = part.text;
+      parent.append(anchor);
+    } else if (part.text) {
+      parent.append(document.createTextNode(part.text));
+    }
+  }
+}
+
+function tapeFields(sleeve, trade) {
+  const shaped = deriveSleeve({ ...trade, sleeve });
+  const seed = shaped.seed || deriveSleeve({ sleeve }).seed;
+  const pnlFrac = readFrac(trade, "pnl_frac_of_book") ?? readFrac(trade, "pnl_frac");
+  const pnl = seedTimes(seed, pnlFrac);
+  const why = preferredWhy(trade);
+  return {
+    time: formatEt(tradeStamp(trade)) || "\u2014",
+    ticker: trade.ticker || "\u2014",
+    side: trade.side || "\u2014",
+    notional: notionalText(seed, readFrac(trade, "notional_frac_of_book")),
+    tradePnl: formatUsd(pnl, { signed: true }),
+    runningPnl: formatUsd(shaped.runningPnl, { signed: true }),
+    runningBalance: formatUsd(shaped.runningBalance),
+    pnl,
+    runningPnlValue: shaped.runningPnl,
+    runningBalanceValue: shaped.runningBalance,
+    why: why.text,
+    whyKind: why.kind,
+    whyUuid: why.uuid,
+  };
+}
+
+function renderWhyCell(fields, sleeve) {
+  const cell = el("td", "why");
+  if (fields.whyKind === "machine") {
+    const stack = el("div", "why-stack");
+    stack.append(el("span", "why-label", fields.why));
+    const details = document.createElement("details");
+    details.className = "why-id";
+    const summary = document.createElement("summary");
+    summary.textContent = "Order id";
+    details.append(summary);
+    if (fields.whyUuid) details.append(el("span", "why-uuid", fields.whyUuid));
+    stack.append(details);
+    cell.append(stack);
+    cell.title = fields.why;
+    return cell;
+  }
+  if (fields.why) {
+    fillLinked(cell, fields.why, sleeve);
+    cell.title = fields.why;
+  }
+  return cell;
+}
+
+function downloadCsv(filename, text) {
+  const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
 function renderTape(sleeve, trades) {
-  const seedRow = { sleeve };
   const section = el("section", `tape ${sleeve}`);
-  section.append(el("h3", null, labelFor(sleeve)));
+  const head = el("div", "tape-head");
+  const heading = el("h3");
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "tape-toggle";
+  const panelId = `tape-panel-${sleeve}`;
+  toggle.setAttribute("aria-controls", panelId);
+  const open = storedTapeOpen(sleeve);
+  toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  toggle.append(document.createTextNode(labelFor(sleeve)));
+  const chevron = el("span", "chevron");
+  chevron.setAttribute("aria-hidden", "true");
+  toggle.append(chevron);
+  heading.append(toggle);
+
+  const exportBtn = document.createElement("button");
+  exportBtn.type = "button";
+  exportBtn.className = "tape-export";
+  exportBtn.textContent = "Download CSV";
+  exportBtn.setAttribute("aria-label", `Download ${labelFor(sleeve)} CSV`);
+
+  const panel = el("div", "tape-panel");
+  panel.id = panelId;
+  panel.hidden = !open;
+  toggle.addEventListener("click", () => {
+    const next = toggle.getAttribute("aria-expanded") !== "true";
+    toggle.setAttribute("aria-expanded", next ? "true" : "false");
+    panel.hidden = !next;
+    storeTapeOpen(sleeve, next);
+  });
+  exportBtn.addEventListener("click", () => {
+    const rows = trades.map((trade) => tapeFields(sleeve, trade));
+    downloadCsv(csvFilename(sleeve), tapeCsv(rows));
+  });
+
+  head.append(heading, exportBtn);
+  section.append(head);
+
   if (!trades.length) {
-    section.append(el("p", "empty", "No scrubbed fills."));
+    panel.append(el("p", "empty", "No scrubbed fills."));
+    section.append(panel);
     return section;
   }
+
   const wrap = el("div", "table-wrap");
   const table = el("table");
   const caption = el(
@@ -310,36 +442,28 @@ function renderTape(sleeve, trades) {
   }
   thead.append(headRow);
   const tbody = el("tbody");
-  const derivedSeed = deriveSleeve(seedRow).seed;
   for (const trade of trades) {
-    const shaped = deriveSleeve({ ...trade, sleeve });
-    const seed = shaped.seed || derivedSeed;
-    const pnlFrac = readFrac(trade, "pnl_frac_of_book") ?? readFrac(trade, "pnl_frac");
-    const pnl = seedTimes(seed, pnlFrac);
-    const when = formatEt(tradeStamp(trade));
+    const fields = tapeFields(sleeve, trade);
     const tr = el("tr");
     const side = el("td");
-    const pill = el("span", `pill ${trade.side || ""}`, trade.side || "\u2014");
+    const pill = el("span", `pill ${trade.side || ""}`, fields.side);
     side.append(pill);
-    const cells = [
-      el("td", null, when || "\u2014"),
-      el("td", "ticker", trade.ticker || "\u2014"),
+    tr.append(
+      el("td", null, fields.time),
+      el("td", "ticker", fields.ticker),
       side,
-      el("td", "num", notionalText(seed, readFrac(trade, "notional_frac_of_book"))),
-      el("td", `num ${tone(pnl)}`, formatUsd(pnl, { signed: true })),
-      el("td", `num ${tone(shaped.runningPnl)}`, formatUsd(shaped.runningPnl, { signed: true })),
-      el("td", `num ${tone(shaped.runningBalance)}`, formatUsd(shaped.runningBalance)),
-    ];
-    const whyText = trade.why == null ? "" : String(trade.why);
-    const whyCell = el("td", "why", whyText);
-    if (whyText) whyCell.title = whyText;
-    cells.push(whyCell);
-    tr.append(...cells);
+      el("td", "num", fields.notional),
+      el("td", `num ${tone(fields.pnl)}`, fields.tradePnl),
+      el("td", `num ${tone(fields.runningPnlValue)}`, fields.runningPnl),
+      el("td", `num ${tone(fields.runningBalanceValue)}`, fields.runningBalance),
+      renderWhyCell(fields, sleeve)
+    );
     tbody.append(tr);
   }
   table.append(caption, thead, tbody);
   wrap.append(table);
-  section.append(wrap);
+  panel.append(wrap);
+  section.append(panel);
   return section;
 }
 
