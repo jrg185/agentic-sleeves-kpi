@@ -90,6 +90,11 @@ Each order object:
                          timestamp is timestamp_et.
   created_at             Used when executions have no timestamp.
   updated_at             Used when created_at is also absent.
+  why                    Optional human note. A machine stub is ignored.
+  notes                  Optional human note.
+  note                   Alias of notes.
+  exit                   Optional human exit sentence. Folded into notes.
+                         Not its own column. Objects are ignored.
 
 Skipped without error: USDC, a USDC quote (BTC-USDC), ticker USD,
 and any state other than filled.
@@ -97,12 +102,14 @@ and any state other than filled.
 Written columns: sleeve ("crypto" or "equities"), timestamp_et, ticker, side,
 qty, avg_price, notional_usd, fee_usd, pnl_trade_usd, why, notes, order_id.
 order_id is the Robinhood uuid. why and notes stay null unless the fill
-carries a human why, notes, or note. "RH Agentic backfill order <uuid>",
+carries a human why, notes, note, or exit. "RH Agentic backfill order <uuid>",
 "RH Agentic sync order <uuid>", and the bare placeholder "backfill from RH"
-are not human notes and are not stored. Opening buys store pnl_trade_usd 0.
-A closing sell stores price P&L versus the open average. Upsert is
-ON CONFLICT (order_id) DO NOTHING, so a repeat fill does not replace a human
-why already stored for that order_id. An older why of
+are not human notes and are never written into why. Opening buys store
+pnl_trade_usd 0. A closing sell stores price P&L versus the open average.
+Insert is ON CONFLICT (order_id) DO UPDATE of why/notes only when the new
+why is human and the stored why is null, blank, or a machine stub. A stored
+human why is left unchanged. A later poll can attach ledger why, notes, or
+exit to an existing stub by order_id. An older why of
 "RH Agentic backfill order <uuid>" or "RH Agentic sync order <uuid>" still
 counts as that uuid until the migration copies it onto order_id.
 
@@ -213,7 +220,16 @@ insert into public.kpi_trades (
     %(sleeve)s, %(timestamp_et)s, %(ticker)s, %(side)s, %(qty)s, %(avg_price)s,
     %(notional_usd)s, %(fee_usd)s, %(pnl_trade_usd)s, %(why)s, %(notes)s, %(order_id)s
 )
-on conflict (order_id) do nothing
+on conflict (order_id) do update
+set
+    why = excluded.why,
+    notes = coalesce(excluded.notes, kpi_trades.notes)
+where excluded.why is not null
+  and (
+    kpi_trades.why is null
+    or btrim(kpi_trades.why) = ''
+    or kpi_trades.why ~* '^RH Agentic (backfill|sync) order [0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+  )
 """
 UPSERT_SQL_NO_NOTES = """
 insert into public.kpi_trades (
@@ -223,7 +239,37 @@ insert into public.kpi_trades (
     %(sleeve)s, %(timestamp_et)s, %(ticker)s, %(side)s, %(qty)s, %(avg_price)s,
     %(notional_usd)s, %(fee_usd)s, %(pnl_trade_usd)s, %(why)s, %(order_id)s
 )
-on conflict (order_id) do nothing
+on conflict (order_id) do update
+set why = excluded.why
+where excluded.why is not null
+  and (
+    kpi_trades.why is null
+    or btrim(kpi_trades.why) = ''
+    or kpi_trades.why ~* '^RH Agentic (backfill|sync) order [0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+  )
+"""
+NOTE_UPDATE_SQL = """
+update public.kpi_trades
+set why = %(why)s,
+    notes = coalesce(%(notes)s, notes)
+where order_id = %(order_id)s
+  and why is not distinct from %(old_why)s
+  and (
+    why is null
+    or btrim(why) = ''
+    or why ~* '^RH Agentic (backfill|sync) order [0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+  )
+"""
+NOTE_UPDATE_SQL_NO_NOTES = """
+update public.kpi_trades
+set why = %(why)s
+where order_id = %(order_id)s
+  and why is not distinct from %(old_why)s
+  and (
+    why is null
+    or btrim(why) = ''
+    or why ~* '^RH Agentic (backfill|sync) order [0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+  )
 """
 
 # Public example from https://docs.robinhood.com/crypto/trading/ (not a live key).
@@ -296,12 +342,56 @@ def human_note(value) -> str | None:
     return text
 
 
+def exit_note(value) -> str | None:
+    """Human exit sentence. Nested objects and machine stubs are not notes."""
+    if not isinstance(value, str):
+        return None
+    return human_note(value)
+
+
 def notes_from_fill(order: dict) -> str | None:
+    notes = None
     for key in ("notes", "note"):
         text = human_note(order.get(key))
         if text:
-            return text
-    return None
+            notes = text
+            break
+    exit_text = exit_note(order.get("exit"))
+    if not exit_text:
+        return notes
+    if not notes:
+        return exit_text
+    if exit_text == notes or exit_text in notes:
+        return notes
+    return f"{notes}\n{exit_text}"
+
+
+def why_is_open(value) -> bool:
+    """True when a stored why can accept a human note. Human text stays put."""
+    if value is None:
+        return True
+    text = str(value).strip()
+    if not text:
+        return True
+    return bool(MACHINE_WHY.match(text))
+
+
+def note_patch(existing: dict | None, incoming: dict) -> dict | None:
+    """why/notes to fill. None leaves the stored row unchanged.
+
+    The incoming why must already be human. A machine stub or empty payload
+    does not clear or replace a stored why. A stored human why is never updated.
+    """
+    if existing is not None and not why_is_open(existing.get("why")):
+        return None
+    why = incoming.get("why") or None
+    if not why:
+        return None
+    patch = {"why": why}
+    notes = incoming.get("notes") or None
+    if notes:
+        patch["notes"] = notes
+    return patch
 
 
 def split_symbol(order: dict) -> tuple[str, str]:
@@ -531,9 +621,47 @@ def assign_pnl(existing: list[dict], new_rows: list[dict]) -> list[dict]:
 
 
 def rows_from_orders(orders: list[dict], existing: list[dict]) -> list[dict]:
+    fresh, _fills = plan_sync(orders, existing)
+    return fresh
+
+
+def note_fills_for(mapped: list[dict], existing: list[dict]) -> list[dict]:
+    """Human why/notes for rows already stored under order_id.
+
+    Only an empty or machine stored why is filled. A human stored why is omitted
+    so the caller leaves it unchanged.
+    """
+    index: dict[str, dict] = {}
+    for row in existing:
+        order_id = str(row.get("order_id") or "").strip().lower()
+        if order_id and order_id not in index:
+            index[order_id] = row
+    fills = []
+    seen: set[str] = set()
+    for row in mapped:
+        order_id = str(row.get("order_id") or "").strip().lower()
+        if not order_id or order_id in seen or order_id not in index:
+            continue
+        seen.add(order_id)
+        patch = note_patch(index[order_id], row)
+        if not patch:
+            continue
+        fills.append(
+            {
+                "order_id": order_id,
+                "old_why": index[order_id].get("why"),
+                "why": patch["why"],
+                "notes": patch.get("notes"),
+            }
+        )
+    return fills
+
+
+def plan_sync(orders: list[dict], existing: list[dict]) -> tuple[list[dict], list[dict]]:
+    """New priced fills, plus note fills for stubs already stored by order_id."""
     mapped = map_orders(orders)
     fresh = drop_known(mapped, existing)
-    return assign_pnl(existing, fresh)
+    return assign_pnl(existing, fresh), note_fills_for(mapped, existing)
 
 
 def orders_from_payload(payload) -> list[dict]:
@@ -879,6 +1007,96 @@ def upsert_db(db_url: str, rows: list[dict], include_notes: bool = True) -> None
         raise SyncError("database upsert into kpi_trades failed. The sync did not finish.") from exc
 
 
+def note_fill_filter(order_id: str, old_why) -> str:
+    if not UUID_RE.fullmatch(order_id):
+        raise SyncError("note fill order_id is not a uuid")
+    filt = "order_id=eq." + urllib.parse.quote(order_id, safe="")
+    if old_why is None:
+        return filt + "&why=is.null"
+    text = str(old_why)
+    if text.strip() == "":
+        return filt + "&why=eq."
+    return filt + "&why=eq." + urllib.parse.quote(text, safe="")
+
+
+def apply_note_fills_rest(base_url: str, key: str, fills: list[dict], include_notes: bool = True) -> int:
+    """PATCH why/notes only while the stored why is still the open value we read."""
+    written = 0
+    for fill in fills:
+        body = {"why": fill["why"]}
+        if include_notes and fill.get("notes"):
+            body["notes"] = fill["notes"]
+        path = "/rest/v1/kpi_trades?" + note_fill_filter(fill["order_id"], fill.get("old_why"))
+        try:
+            returned = rest_call(
+                base_url,
+                key,
+                path,
+                method="PATCH",
+                body=body,
+                extra_headers={"Prefer": "return=representation"},
+            )
+        except SyncError as exc:
+            if include_notes and "notes" in str(exc).lower():
+                print("kpi_trades.notes is absent; storing a human note on why only.", file=sys.stderr)
+                return apply_note_fills_rest(base_url, key, fills, include_notes=False)
+            raise
+        rows = returned if isinstance(returned, list) else []
+        if len(rows) > 1:
+            raise SyncError(f"note fill matched {len(rows)} rows for {fill['order_id']}")
+        written += len(rows)
+    return written
+
+
+def apply_note_fills_db(db_url: str, fills: list[dict], include_notes: bool = True) -> int:
+    sql = NOTE_UPDATE_SQL if include_notes else NOTE_UPDATE_SQL_NO_NOTES
+    written = 0
+    try:
+        with connect_db(db_url) as conn:
+            with conn.cursor() as cur:
+                for fill in fills:
+                    cur.execute(
+                        sql,
+                        {
+                            "order_id": fill["order_id"],
+                            "old_why": fill.get("old_why"),
+                            "why": fill["why"],
+                            "notes": fill.get("notes"),
+                        },
+                    )
+                    if cur.rowcount > 1:
+                        raise SyncError(f"note fill matched {cur.rowcount} rows for {fill['order_id']}")
+                    written += cur.rowcount
+            conn.commit()
+    except SyncError:
+        raise
+    except Exception as exc:
+        message = str(exc).lower()
+        if include_notes and "notes" in message and "column" in message:
+            print("kpi_trades.notes is absent; storing a human note on why only.", file=sys.stderr)
+            return apply_note_fills_db(db_url, fills, include_notes=False)
+        raise SyncError("database note fill on kpi_trades failed. The sync did not finish.") from exc
+    return written
+
+
+def apply_note_fills(env: dict[str, str], fills: list[dict], source: str) -> int:
+    if not fills:
+        return 0
+    key = env.get("SUPABASE_SERVICE_ROLE_KEY") or ""
+    db_url = env.get("SUPABASE_DB_URL") or ""
+    base_url = env.get("SUPABASE_URL") or DEFAULT_URL
+    if key and source == "rest":
+        try:
+            return apply_note_fills_rest(base_url, key, fills)
+        except SyncError:
+            if not db_url:
+                raise
+            print("REST note fill failed; trying SUPABASE_DB_URL", file=sys.stderr)
+    if not db_url:
+        raise SyncError(MISSING_SB)
+    return apply_note_fills_db(db_url, fills)
+
+
 def load_trades(env: dict[str, str]) -> tuple[list[dict], str]:
     key = env.get("SUPABASE_SERVICE_ROLE_KEY") or ""
     db_url = env.get("SUPABASE_DB_URL") or ""
@@ -1028,10 +1246,11 @@ def sync(
         api_key, private_key, account = creds
         start = query_start(read_cursor(cursor_path) or BOOTSTRAP_CURSOR)
         orders = fetch_filled_orders(api_key, private_key, account, start)
-    fresh = rows_from_orders(orders, existing)
+    fresh, fills = plan_sync(orders, existing)
     upsert_rows(env, fresh, source)
+    noted = apply_note_fills(env, fills, source)
     remember_cursor(cursor_path, orders)
-    print(f"rh sync warehouse={source} fetched={len(orders)} upserted={len(fresh)}")
+    print(f"rh sync warehouse={source} fetched={len(orders)} upserted={len(fresh)} noted={noted}")
     return 0
 
 
@@ -1311,8 +1530,156 @@ def self_test() -> int:
     )
     if kept:
         raise SyncError("repeat order_id was planned over an existing human why")
-    if "do update" in UPSERT_SQL.lower():
-        raise SyncError("upsert would clobber an existing why")
+    replacement = map_orders(
+        [
+            {
+                "id": sell["order_id"],
+                "currency_code": "AAA",
+                "side": "sell",
+                "state": "filled",
+                "cumulative_quantity": "4",
+                "average_price": "5",
+                "created_at": "2026-09-28T11:00:00Z",
+                "why": "replacement thesis",
+            }
+        ]
+    )
+    human_existing = {
+        "order_id": sell["order_id"],
+        "why": "keep this thesis",
+    }
+    if note_fills_for(replacement, [human_existing]):
+        raise SyncError("conflict with human already present was changed")
+    if note_patch(human_existing, replacement[0]) is not None:
+        raise SyncError("conflict with human already present was changed")
+    stub_existing = {
+        "order_id": sell["order_id"],
+        "why": f"RH Agentic sync order {sell['order_id']}",
+    }
+    stub_fill = note_fills_for(replacement, [stub_existing])
+    if stub_fill != [
+        {
+            "order_id": sell["order_id"],
+            "old_why": stub_existing["why"],
+            "why": "replacement thesis",
+            "notes": None,
+        }
+    ]:
+        raise SyncError(f"machine stub was not filled {stub_fill}")
+    empty_fill = note_fills_for(replacement, [{"order_id": sell["order_id"], "why": None}])
+    if len(empty_fill) != 1 or empty_fill[0]["why"] != "replacement thesis":
+        raise SyncError(f"empty why was not filled {empty_fill}")
+    if note_fills_for(map_orders(
+        [
+            {
+                "id": sell["order_id"],
+                "currency_code": "AAA",
+                "side": "sell",
+                "state": "filled",
+                "cumulative_quantity": "4",
+                "average_price": "5",
+                "created_at": "2026-09-28T11:00:00Z",
+            }
+        ]
+    ), [human_existing]):
+        raise SyncError("empty payload would change a human why")
+    if note_patch(stub_existing, {"why": None, "notes": None}) is not None:
+        raise SyncError("empty payload would clear a machine stub")
+    ledger_id = "12121212-1212-4121-8121-121212121212"
+    with_why = map_order(
+        {
+            "id": ledger_id,
+            "currency_code": "OP",
+            "side": "buy",
+            "state": "filled",
+            "cumulative_quantity": "1",
+            "average_price": "1",
+            "created_at": "2026-09-28T14:30:00Z",
+            "why": "ledger why",
+            "exit": "target hit",
+        }
+    )
+    if not with_why or with_why["why"] != "ledger why" or with_why["notes"] != "target hit":
+        raise SyncError(f"human why was not stored {with_why}")
+    if with_why["order_id"] != ledger_id or "exit" in with_why:
+        raise SyncError("human why did not keep order_id, or exit became a column")
+    without = map_order(
+        {
+            "id": ledger_id,
+            "currency_code": "OP",
+            "side": "buy",
+            "state": "filled",
+            "cumulative_quantity": "1",
+            "average_price": "1",
+            "created_at": "2026-09-28T14:30:00Z",
+        }
+    )
+    if not without or without["why"] is not None or without["notes"] is not None:
+        raise SyncError(f"missing note was stored {without}")
+    if without["order_id"] != ledger_id:
+        raise SyncError("payload without a note dropped order_id")
+    exit_only = map_order(
+        {
+            "id": ledger_id,
+            "currency_code": "OP",
+            "side": "buy",
+            "state": "filled",
+            "cumulative_quantity": "1",
+            "average_price": "1",
+            "created_at": "2026-09-28T14:30:00Z",
+            "exit": "target hit",
+            "notes": "scale out",
+        }
+    )
+    if not exit_only or exit_only["why"] != "scale out\ntarget hit" or exit_only["notes"] != "scale out\ntarget hit":
+        raise SyncError(f"exit was not folded into notes {exit_only}")
+    messy_exit = map_order(
+        {
+            "id": ledger_id,
+            "currency_code": "OP",
+            "side": "buy",
+            "state": "filled",
+            "cumulative_quantity": "1",
+            "average_price": "1",
+            "created_at": "2026-09-28T14:30:00Z",
+            "exit": {"reason": "target hit"},
+        }
+    )
+    if not messy_exit or messy_exit["why"] is not None or messy_exit["notes"] is not None:
+        raise SyncError(f"exit object was stored {messy_exit}")
+    stored = rows_from_orders(
+        [
+            {
+                "id": ledger_id,
+                "currency_code": "OP",
+                "side": "buy",
+                "state": "filled",
+                "cumulative_quantity": "1",
+                "average_price": "1",
+                "created_at": "2026-09-28T14:30:00Z",
+                "why": "ledger why",
+            }
+        ],
+        [],
+    )
+    if len(stored) != 1 or stored[0]["why"] != "ledger why" or stored[0]["order_id"] != ledger_id:
+        raise SyncError(f"human why was not in the insert plan {stored}")
+    bare_plan = rows_from_orders(
+        [
+            {
+                "id": ledger_id,
+                "currency_code": "OP",
+                "side": "buy",
+                "state": "filled",
+                "cumulative_quantity": "1",
+                "average_price": "1",
+                "created_at": "2026-09-28T14:30:00Z",
+            }
+        ],
+        [],
+    )
+    if len(bare_plan) != 1 or bare_plan[0]["why"] is not None or bare_plan[0]["order_id"] != ledger_id:
+        raise SyncError(f"insert plan invented a why {bare_plan}")
     envelope = orders_from_payload(
         {
             "data": {
@@ -1342,12 +1709,23 @@ def self_test() -> int:
     leaked = json.dumps(rows_from_orders(envelope, existing))
     if "SHOULD_NOT_LEAK" in leaked:
         raise SyncError("account number leaked into a kpi_trades row")
-    if "on conflict (order_id) do nothing" not in UPSERT_SQL.lower():
-        raise SyncError("upsert is not keyed on order_id")
-    if "notes" not in UPSERT_SQL or "do update" in UPSERT_SQL_NO_NOTES.lower():
+    if "on conflict (order_id) do update" not in UPSERT_SQL.lower():
+        raise SyncError("upsert does not fill an open why on conflict")
+    if "excluded.why is not null" not in UPSERT_SQL.lower():
+        raise SyncError("conflict update can write an empty why")
+    update_set = UPSERT_SQL.lower().split("do update", 1)[1].split("where", 1)[0]
+    if "qty" in update_set or "pnl_trade_usd" in update_set or "avg_price" in update_set:
+        raise SyncError("conflict update writes more than why/notes")
+    if "rh agentic (backfill|sync) order" not in UPSERT_SQL.lower():
+        raise SyncError("conflict update does not recognize a machine why")
+    if "notes" not in UPSERT_SQL or "do update" not in UPSERT_SQL_NO_NOTES.lower():
         raise SyncError("notes upsert is not optional and conflict-safe")
-    if "on conflict (order_id) do nothing" not in UPSERT_SQL_NO_NOTES.lower():
-        raise SyncError("notes-less upsert is not keyed on order_id")
+    if "excluded.why is not null" not in UPSERT_SQL_NO_NOTES.lower():
+        raise SyncError("notes-less conflict update can write an empty why")
+    if "is not distinct from" not in NOTE_UPDATE_SQL.lower():
+        raise SyncError("note fill does not keep the stored why it read")
+    if "exit" in WRITE_COLUMNS:
+        raise SyncError("exit was stored as its own column")
     migration = MIGRATION_PATH.read_text(encoding="utf-8").lower()
     if "add column if not exists order_id" not in migration or "unique index" not in migration:
         raise SyncError("migration does not add a unique order_id")
