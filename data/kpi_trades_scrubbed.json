@@ -880,6 +880,28 @@
     "running_balance_frac": 1.093038
   },
   {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T07:57:53.877947+00:00",
+    "ticker": "LDO",
+    "side": "sell",
+    "notional_frac_of_book": 0.054633,
+    "pnl_frac_of_book": -0.003925,
+    "why": "RH Agentic sync order 6aba1e01-4085-4874-994f-468d9a04e153",
+    "running_pnl_frac": 0.089113,
+    "running_balance_frac": 1.089113
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T07:57:54.488705+00:00",
+    "ticker": "SEI",
+    "side": "sell",
+    "notional_frac_of_book": 0.050967,
+    "pnl_frac_of_book": 0.001209,
+    "why": "RH Agentic sync order 6aba1e02-7fc5-40f9-87d6-c6bc5b892d56",
+    "running_pnl_frac": 0.090322,
+    "running_balance_frac": 1.090322
+  },
+  {
     "sleeve": "equities",
     "timestamp_et": "2026-09-25T19:37:00+00:00",
     "ticker": "QCOM",
