@@ -266,6 +266,28 @@ function renderSleeve(derived, { hero = false } = {}) {
   return card;
 }
 
+function readFrac(row, key) {
+  if (!row || row[key] == null || row[key] === "") return null;
+  const n = Number(row[key]);
+  return Number.isFinite(n) ? n : null;
+}
+
+function seedTimes(seed, frac) {
+  if (seed == null || frac == null) return null;
+  return Math.round((seed * frac + Number.EPSILON) * 100) / 100;
+}
+
+function notionalText(seed, frac) {
+  if (frac == null) return "\u2014";
+  const dollars = seedTimes(seed, frac);
+  const pct = formatPct(frac, { digits: 2 });
+  return dollars == null ? pct : `${formatUsd(dollars)} (${pct})`;
+}
+
+function tradeStamp(trade) {
+  return trade?.timestamp_et || trade?.ts || "";
+}
+
 function renderTape(sleeve, trades) {
   const seedRow = { sleeve };
   const section = el("section", `tape ${sleeve}`);
@@ -276,10 +298,10 @@ function renderTape(sleeve, trades) {
   }
   const wrap = el("div", "table-wrap");
   const table = el("table");
-  const caption = el("caption", null, `${labelFor(sleeve)} fills. Trade P&L dollars are the book seed times pnl_frac.`);
+  const caption = el("caption", null, `${labelFor(sleeve)} fills. Trade P&L dollars are the book seed times the trade fraction of book.`);
   const thead = el("thead");
   const headRow = el("tr");
-  for (const label of ["Time", "Ticker", "Side", "Qty", "Trade P&L", "Running P&L", "Running balance (book)", "Why"]) {
+  for (const label of ["Time", "Ticker", "Side", "Notional", "Trade P&L", "Running P&L", "Running balance (book)", "Why"]) {
     headRow.append(el("th", null, label));
   }
   thead.append(headRow);
@@ -288,16 +310,18 @@ function renderTape(sleeve, trades) {
   for (const trade of trades) {
     const shaped = deriveSleeve({ ...trade, sleeve });
     const seed = shaped.seed || derivedSeed;
-    const pnl = seed == null || trade.pnl_frac == null ? null : Math.round((seed * Number(trade.pnl_frac) + Number.EPSILON) * 100) / 100;
+    const pnlFrac = readFrac(trade, "pnl_frac_of_book") ?? readFrac(trade, "pnl_frac");
+    const pnl = seedTimes(seed, pnlFrac);
+    const when = formatEt(tradeStamp(trade));
     const tr = el("tr");
     const side = el("td");
     const pill = el("span", `pill ${trade.side || ""}`, trade.side || "\u2014");
     side.append(pill);
     const cells = [
-      el("td", null, String(trade.ts || "\u2014")),
+      el("td", null, when || "\u2014"),
       el("td", "ticker", trade.ticker || "\u2014"),
       side,
-      el("td", "num", trade.qty == null ? "\u2014" : String(trade.qty)),
+      el("td", "num", notionalText(seed, readFrac(trade, "notional_frac_of_book"))),
       el("td", `num ${tone(pnl)}`, formatUsd(pnl, { signed: true })),
       el("td", `num ${tone(shaped.runningPnl)}`, formatUsd(shaped.runningPnl, { signed: true })),
       el("td", `num ${tone(shaped.runningBalance)}`, formatUsd(shaped.runningBalance)),
@@ -335,7 +359,14 @@ function render(summaryRows, tradeRows, meta) {
   }
   tapesEl.replaceChildren();
   for (const key of ["crypto", "equities"]) {
-    const rows = (grouped.get(key) || []).slice().sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
+    const rows = (grouped.get(key) || []).slice().sort((a, b) => {
+      const da = parseTime(tradeStamp(a));
+      const db = parseTime(tradeStamp(b));
+      const am = da ? da.getTime() : Number.NEGATIVE_INFINITY;
+      const bm = db ? db.getTime() : Number.NEGATIVE_INFINITY;
+      if (am !== bm) return bm - am;
+      return String(b.timestamp_et || "").localeCompare(String(a.timestamp_et || ""));
+    });
     tapesEl.append(renderTape(key, rows));
   }
 }
