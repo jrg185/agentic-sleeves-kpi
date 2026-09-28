@@ -435,7 +435,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.055267,
     "pnl_frac_of_book": 0.013842,
-    "why": "+15% scale | exit: leftover 0.1031 hold",
+    "why": "+15% scale vs ~$120.66 cost",
     "running_pnl_frac": 0.023302,
     "running_balance_frac": 1.023302
   },
@@ -589,7 +589,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.066633,
     "pnl_frac_of_book": -0.003995,
-    "why": "artifact sell exit (24h -2.20% vol z=1.47 conv 0.63) | exit: closed",
+    "why": "artifact sell exit (24h -2.20% vol z=1.47 conv 0.63)",
     "running_pnl_frac": 0.045472,
     "running_balance_frac": 1.045472
   },
@@ -622,7 +622,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.091233,
     "pnl_frac_of_book": 0.0,
-    "why": "artifact buy $27.64 conv 0.92 (+7.73% 24h vol z=2.99) | exit: artifact sell/exit | day kill -10% | rails force cut",
+    "why": "artifact buy $27.64 conv 0.92 (+7.73% 24h vol z=2.99)",
     "running_pnl_frac": 0.045472,
     "running_balance_frac": 1.045472
   },
@@ -633,7 +633,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.074567,
     "pnl_frac_of_book": 0.0,
-    "why": "artifact buy $22.59 conv 0.75 (+2.10% 24h vol z=5.96) | exit: artifact sell/exit | day kill -10% | rails force cut",
+    "why": "artifact buy $22.59 conv 0.75 (+2.10% 24h vol z=5.96)",
     "running_pnl_frac": 0.045472,
     "running_balance_frac": 1.045472
   },
@@ -655,7 +655,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.073533,
     "pnl_frac_of_book": 0.0,
-    "why": "artifact buy $22.27 conv 0.74 (+8.28% 24h vol z=0.55) | exit: artifact sell/exit | day kill -10% | rails force cut",
+    "why": "artifact buy $22.27 conv 0.74 (+8.28% 24h vol z=0.55)",
     "running_pnl_frac": 0.045472,
     "running_balance_frac": 1.045472
   },
@@ -820,7 +820,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.071533,
     "pnl_frac_of_book": -0.003024,
-    "why": "artifact sell (24h -3.60% vol z=4.35 conv 0.80) | exit: closed flat",
+    "why": "artifact sell (24h -3.60% vol z=4.35 conv 0.80)",
     "running_pnl_frac": 0.103353,
     "running_balance_frac": 1.103353
   },
@@ -831,7 +831,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.087967,
     "pnl_frac_of_book": 0.0,
-    "why": "artifact buy $26.65 conv 0.888 (+20.85% 24h vol z=0.98) | exit: artifact sell/exit | day kill -10% | rails force cut; +15% scale once; +5% reanalyze",
+    "why": "artifact buy $26.65 conv 0.888 (+20.85% 24h vol z=0.98)",
     "running_pnl_frac": 0.103353,
     "running_balance_frac": 1.103353
   },
@@ -842,7 +842,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.075533,
     "pnl_frac_of_book": -0.004825,
-    "why": "artifact sell (24h -5.64% vol z=1.06 conv 0.704) | exit: closed flat",
+    "why": "artifact sell (24h -5.64% vol z=1.06 conv 0.704)",
     "running_pnl_frac": 0.098528,
     "running_balance_frac": 1.098528
   },
@@ -853,7 +853,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.0606,
     "pnl_frac_of_book": -0.00549,
-    "why": "artifact sell (24h -4.26% vol z=1.61 conv 0.707) | exit: closed flat",
+    "why": "artifact sell (24h -4.26% vol z=1.61 conv 0.707)",
     "running_pnl_frac": 0.093038,
     "running_balance_frac": 1.093038
   },
@@ -864,7 +864,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.0725,
     "pnl_frac_of_book": 0.0,
-    "why": "artifact buy $21.95 conv 0.732 (+3.01% 24h vol z=2.39); top-up held lot | exit: artifact sell/exit | day kill -10% | rails force cut; +15% scale once; +5% reanalyze",
+    "why": "artifact buy $21.95 conv 0.732 (+3.01% 24h vol z=2.39); top-up held lot",
     "running_pnl_frac": 0.093038,
     "running_balance_frac": 1.093038
   },
@@ -875,7 +875,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.0595,
     "pnl_frac_of_book": 0.0,
-    "why": "artifact buy $18.04 conv 0.601 (+2.58% 24h vol z=0.92) | exit: artifact sell/exit | day kill -10% | rails force cut; +15% scale once; +5% reanalyze",
+    "why": "artifact buy $18.04 conv 0.601 (+2.58% 24h vol z=0.92)",
     "running_pnl_frac": 0.093038,
     "running_balance_frac": 1.093038
   },
@@ -886,7 +886,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.054633,
     "pnl_frac_of_book": -0.003925,
-    "why": "artifact sell (24h -5.70% vol z=1.81 conv 0.766) | exit: closed flat",
+    "why": "artifact sell (24h -5.70% vol z=1.81 conv 0.766)",
     "running_pnl_frac": 0.089113,
     "running_balance_frac": 1.089113
   },
@@ -897,7 +897,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.050967,
     "pnl_frac_of_book": 0.001209,
-    "why": "profit-exit trail breach (trail 0.082063; mark through) | exit: closed flat",
+    "why": "profit-exit trail breach (trail 0.082063; mark through)",
     "running_pnl_frac": 0.090322,
     "running_balance_frac": 1.090322
   },
@@ -908,7 +908,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.075833,
     "pnl_frac_of_book": 0.008024,
-    "why": "profit-exit +5% reanalyze half-scale (+11.53% vs 0.09695; no profit_exits model; short-hold) | exit: leftover 210.01 trail 0.10459 | +15% failsafe 0.11149",
+    "why": "profit-exit +5% reanalyze half-scale (+11.53% vs 0.09695; no profit_exits model; short-hold)",
     "running_pnl_frac": 0.098346,
     "running_balance_frac": 1.098346
   },
@@ -919,7 +919,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.085,
     "pnl_frac_of_book": 0.0,
-    "why": "artifact buy $25.51 conv 0.850 (+6.86% 24h vol z=2.43) | exit: artifact sell/exit | day kill -10% | rails force cut; +15% scale once; +5% reanalyze",
+    "why": "artifact buy $25.51 conv 0.850 (+6.86% 24h vol z=2.43)",
     "running_pnl_frac": 0.098346,
     "running_balance_frac": 1.098346
   },
@@ -930,7 +930,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.085633,
     "pnl_frac_of_book": 0.0,
-    "why": "artifact buy $25.85 conv 0.862 (+28.25% 24h vol z=0.64; ATR%~19%) | exit: artifact sell/exit | day kill -10% | rails force cut; +15% scale once; +5% reanalyze; short-hold",
+    "why": "artifact buy $25.85 conv 0.862 (+28.25% 24h vol z=0.64; ATR%~19%)",
     "running_pnl_frac": 0.098346,
     "running_balance_frac": 1.098346
   },
@@ -941,7 +941,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.0472,
     "pnl_frac_of_book": 0.012134,
-    "why": "profit-exit +5% reanalyze half-scale (+9.72% vs 201.928; no profit_exits model; short-hold) | exit: leftover 0.0636 trail 212.02 | +15% failsafe 232.22",
+    "why": "profit-exit +5% reanalyze half-scale (+9.72% vs 201.928; no profit_exits model; short-hold)",
     "running_pnl_frac": 0.11048,
     "running_balance_frac": 1.11048
   },
@@ -952,7 +952,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.050439,
     "pnl_frac_of_book": 0.015352,
-    "why": "RH Agentic sync order 6aba5500-75b3-42cf-9fa8-a17a8bf82583",
+    "why": "short-hold profit-take leftover (+17.82% vs 201.928; past +15% failsafe 232.22; no profit_exits; do not ride QNT leftover)",
     "running_pnl_frac": 0.125832,
     "running_balance_frac": 1.125832
   },
