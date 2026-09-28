@@ -1,14 +1,25 @@
 name: Export KPI
 
 # Refreshes public.kpi_sleeve_snapshots, then reads the scrubbed views.
-# A failed refresh does not commit KPI JSON. It stamps data/meta.json and the
-# failure step publishes that file only, so a read-only or full disk stays visible.
+# Robinhood has no fill webhook. Standing sync is hourly.
+# Cron 0 * * * * polls only when RH_API_KEY and RH_BASE64_PRIVATE_KEY are
+# both set. Hourly Actions poll skipped otherwise, exit 0. No Robinhood call.
+# Tonight Crypto Desk polls MCP get_crypto_orders and workflow_dispatch the JSON.
+# Bonus: repository_dispatch rh-fill or workflow_dispatch sync_rh_json writes
+# a temp file, upserts kpi_trades, then continues with refresh and export.
+# The */15 cron only refreshes marks. A bad requested payload exits non-zero
+# and stamps data/meta.json. A failed refresh does the same.
+# Pull requests only self-test. ROBINHOOD_TOKEN is not used.
+# Sleeve is crypto or equities from asset class. USDC and funding are skipped.
 # Marks: public Coinbase ticker (crypto) and Yahoo chart (equities).
 # FINNHUB_API_KEY, COINSTATS_API_KEY, and ALPHA_VANTAGE_API_KEY are optional.
 # data/** pushes are ignored so the export commit does not run this job again.
 
 on:
   schedule:
+    # Preferred Actions poll at minute 0. Skips when Robinhood secrets are absent.
+    - cron: "0 * * * *"
+    # Mark refresh only. These crons do not call Robinhood.
     # US cash session in both EDT and EST (about 9:30am–5:00pm ET), every 15 minutes.
     - cron: "*/15 13-21 * * 1-5"
     # Hourly outside that window, including weekends, so the crypto sleeve does not sit overnight.
@@ -20,6 +31,14 @@ on:
       - "data/**"
   pull_request:
   workflow_dispatch:
+    inputs:
+      sync_rh_json:
+        description: "On-fill JSON (one order, a list, or results/data). Empty skips the sync. This Action does not poll Robinhood."
+        required: false
+        type: string
+        default: ""
+  repository_dispatch:
+    types: [rh-fill]
 
 permissions:
   contents: write
@@ -38,6 +57,9 @@ jobs:
       - name: Position math
         run: python3 scripts/refresh_kpi_snapshots.py --self-test
 
+      - name: RH fill mapper
+        run: python3 scripts/sync_rh_kpi_trades.py --self-test
+
   export:
     needs: check
     if: github.event_name != 'pull_request'
@@ -45,6 +67,78 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Hourly Robinhood poll
+        if: github.event_name == 'schedule' && github.event.schedule == '0 * * * *'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          RH_API_KEY: ${{ secrets.RH_API_KEY }}
+          RH_BASE64_PRIVATE_KEY: ${{ secrets.RH_BASE64_PRIVATE_KEY }}
+          RH_AGENTIC_ACCOUNT: ${{ secrets.RH_AGENTIC_ACCOUNT }}
+        run: |
+          if [ -z "${RH_API_KEY}" ] || [ -z "${RH_BASE64_PRIVATE_KEY}" ]; then
+            echo "Hourly Actions poll skipped: RH_API_KEY and RH_BASE64_PRIVATE_KEY are unset. No Robinhood call."
+            exit 0
+          fi
+          python3 -m pip install --disable-pip-version-check --break-system-packages 'pynacl>=1.5,<2'
+          python3 scripts/sync_rh_kpi_trades.py --from-rh
+
+      - name: Stage on-fill JSON
+        id: stage
+        env:
+          SYNC_RH_JSON: ${{ github.event.inputs.sync_rh_json }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+
+          dest = Path("/tmp/rh-fill.json")
+          name = os.environ.get("GITHUB_EVENT_NAME") or ""
+          raw = os.environ.get("SYNC_RH_JSON") or ""
+          output = os.environ.get("GITHUB_OUTPUT")
+
+          def publish(path: str) -> None:
+              if output:
+                  with open(output, "a", encoding="utf-8") as handle:
+                      handle.write(f"feed={path}\n")
+              print(f"staged {path}")
+
+          if name == "repository_dispatch":
+              event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+              client = event.get("client_payload")
+              if not isinstance(client, dict) or not client:
+                  sys.exit("rh-fill dispatch needs a client_payload object. kpi_trades was not changed.")
+              dest.write_text(json.dumps(client), encoding="utf-8")
+              publish(str(dest))
+          elif raw.strip():
+              text = raw.strip()
+              if text[0] in "{[":
+                  dest.write_text(raw, encoding="utf-8")
+                  publish(str(dest))
+              else:
+                  publish(text)
+          elif os.environ.get("RH_FILLS_PATH"):
+              publish(os.environ["RH_FILLS_PATH"])
+          elif Path("data/rh_fills.json").is_file():
+              publish("data/rh_fills.json")
+          else:
+              print("No fill payload. Scheduled Export KPI does not poll Robinhood.")
+              if output:
+                  with open(output, "a", encoding="utf-8") as handle:
+                      handle.write("feed=\n")
+          PY
+
+      - name: Sync RH fills into kpi_trades
+        if: steps.stage.outputs.feed != ''
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          python3 scripts/sync_rh_kpi_trades.py --self-test
+          python3 scripts/sync_rh_kpi_trades.py --from-json "${{ steps.stage.outputs.feed }}"
 
       - name: Refresh kpi_sleeve_snapshots
         env:
@@ -69,6 +163,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- data/kpi_summary.json data/kpi_trades_scrubbed.json data/models_oos.json data/meta.json
+          if [ -f data/rh_kpi_sync_cursor.json ]; then
+            git add -- data/rh_kpi_sync_cursor.json
+          fi
           if git diff --cached --quiet; then
             echo "KPI JSON unchanged."
           else
