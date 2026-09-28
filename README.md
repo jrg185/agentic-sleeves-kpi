@@ -138,21 +138,30 @@ Add these repository secrets (Settings → Secrets and variables → Actions). D
 | `FINNHUB_API_KEY` | Optional equities mark. Yahoo chart is the public fallback. |
 | `COINSTATS_API_KEY` | Optional crypto mark after Coinbase and Yahoo. |
 | `ALPHA_VANTAGE_API_KEY` | Optional equities mark after Finnhub and Yahoo. |
-| `RH_API_KEY` | Robinhood Crypto Trading API key (`x-api-key`). Create it on the Agentic crypto account. The sync signs GET order requests only. |
-| `RH_BASE64_PRIVATE_KEY` | Base64 Ed25519 private-key seed for that API key. Never printed. |
-| `RH_ACCOUNT_NUMBER` | Optional. When set, list v2 orders for that crypto account. |
+| `RH_API_KEY` | Not set today. Later Crypto Trading API key (`x-api-key`) if a REST path is added. The sync signs GET order requests only. |
+| `RH_BASE64_PRIVATE_KEY` | Not set today. Base64 Ed25519 private-key seed for that API key. Never printed. |
+| `RH_ACCOUNT_NUMBER` | Optional, and only with the two keys above. Lists v2 orders for that crypto account. |
+| `RH_FILLS_PATH` | Optional path to a JSON file of filled crypto orders. `data/rh_fills.json` is used when this is unset and the file is in the checkout. |
 
 Public Coinbase and Yahoo marks do not need those quote keys.
 
 ### RH fill sync
 
-`scripts/sync_rh_kpi_trades.py` runs before the snapshot refresh. `agentic-crypto-signals` has no Robinhood client, and this repo had no RH secret names, so the Action uses the three names above.
+`scripts/sync_rh_kpi_trades.py` runs before the snapshot refresh. Crypto sleeve only. USDC and funding pairs are skipped. Equity fills stay with Equities Desk.
 
-The script reads filled crypto orders since a watermark (`data/rh_kpi_sync_cursor.json`, else `max(timestamp_et)` on the crypto sleeve). It skips USDC and USDC pairs. Each new row is `sleeve=crypto`, with `why` set to `RH Agentic sync order <uuid>`. A row whose `why` already contains that uuid, including `RH Agentic backfill order <uuid>`, is not inserted again. Buys store `pnl_trade_usd` 0. A closing sell stores price P&L against the open average. The script does not place orders.
+There is no Robinhood login on this Action. Tonight's book was a one-shot MCP read plus a SQL insert. Until a feed or a REST key exists, the sync step exits 1 and stamps `data/meta.json` (**Export failed**). It does not exit 0.
 
-Equity payloads with `asset_class=equity` map to `sleeve=equities` in the self-test. The live fetch is crypto only. This API has no equity orders route.
+Feed filled orders with `--from-json`, `RH_FILLS_PATH`, or `data/rh_fills.json`. A list, `{"results": [...]}`, or an MCP envelope `{"data": {"results": [...]}}` all work. Account numbers in that envelope are not written.
 
-After this is merged, run **Actions → Export KPI → Run workflow** once. A new Agentic crypto fill then shows on https://jrg185.github.io/the-book/ within one schedule window: 15 minutes during the cash-session cron, otherwise the hourly cron. The run stays red until `RH_API_KEY` and `RH_BASE64_PRIVATE_KEY` are set, and it stamps `data/meta.json` instead of exiting 0.
+Apply [`scripts/migrate_kpi_trades_order_id.sql`](scripts/migrate_kpi_trades_order_id.sql) before the cron writes. It adds nullable `order_id text`, copies uuids out of `RH Agentic backfill order <uuid>` / `RH Agentic sync order <uuid>`, and creates a unique index. When `SUPABASE_DB_URL` is set, the sync runs that file itself. Upserts are `ON CONFLICT (order_id) DO NOTHING`.
+
+```bash
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/migrate_kpi_trades_order_id.sql
+```
+
+If a Crypto Trading API key is added later, set `RH_API_KEY` and `RH_BASE64_PRIVATE_KEY`. Optional `RH_ACCOUNT_NUMBER` selects the v2 orders route. Those secrets are not required for this PR.
+
+After the migration is applied and a fills feed is available, run **Actions → Export KPI → Run workflow** once. A new Agentic crypto fill then shows on https://jrg185.github.io/the-book/ within one schedule window: 15 minutes during the cash-session cron, otherwise the hourly cron.
 
 After the Supabase secrets are saved, run **Actions → Export KPI → Run workflow**. A successful export sets `meta.source` to `supabase` and replaces the KPI JSON. `fixtures/` and `data/models.json` stay as they are.
 

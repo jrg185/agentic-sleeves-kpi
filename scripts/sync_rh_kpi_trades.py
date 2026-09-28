@@ -1,49 +1,50 @@
 #!/usr/bin/env python3
-"""Insert filled Robinhood crypto orders into public.kpi_trades.
+"""Upsert filled Robinhood crypto orders into public.kpi_trades.
 
-Export KPI already refreshes sleeve snapshots and exports scrubbed JSON.
-This script is the fill ingest in front of that refresh. It only signs GET
-requests against the Robinhood Crypto Trading API. It does not place, cancel,
-or preview orders.
+Export KPI refreshes sleeve snapshots on a schedule. This script is the crypto
+fill ingest in front of that refresh. Crypto sleeve only. USDC and funding
+pairs are skipped. Equities Desk owns equity fills; this script does not
+import them.
 
-jrg185/agentic-crypto-signals has no Robinhood client (it is not a broker).
-This repo did not document RH secrets either. Conventional names:
+There is no checked-in Robinhood client and no stored Robinhood login.
+Tonight's backfill was a one-shot Robinhood Trading MCP read plus a Supabase
+INSERT. Live fills still come from that MCP. This Action cannot call MCP.
 
-  RH_API_KEY               Crypto Trading API key. Sent as x-api-key.
-                           Create it on the Agentic crypto account.
-  RH_BASE64_PRIVATE_KEY    Base64 Ed25519 private-key seed. Used only to sign
-                           GET /api/v1/crypto/trading/orders/ (or v2 when
-                           RH_ACCOUNT_NUMBER is set). Never printed.
-  RH_ACCOUNT_NUMBER        Optional. When set, list v2 orders for that account.
+Input, first match wins:
 
-Supabase, same as refresh and export:
+  --from-json PATH          Filled orders. PATH - reads stdin.
+  RH_API_KEY and            Optional later REST path. Signs GET only against
+  RH_BASE64_PRIVATE_KEY     the documented Crypto Trading API. Never prints
+                            the key. RH_ACCOUNT_NUMBER selects v2 orders.
+  RH_FILLS_PATH             JSON file of filled orders.
+  data/rh_fills.json        Same, when that file is in the checkout.
+
+JSON may be a list, {"results": [...]}, or the MCP envelope
+{"data": {"results": [...]}}. Account numbers in the envelope are ignored.
+
+If none of those inputs exist, a live run exits 1 and stamps data/meta.json.
+It does not exit 0 and it does not invent a login.
+
+Rows upsert on public.kpi_trades.order_id (see
+scripts/migrate_kpi_trades_order_id.sql). ON CONFLICT (order_id) DO NOTHING.
+Legacy rows may leave order_id null. A why of
+`RH Agentic backfill order <uuid>` or `RH Agentic sync order <uuid>` counts
+as that uuid until the migration copies it onto order_id.
+
+Supabase, same project as refresh and export:
 
   SUPABASE_URL
   SUPABASE_SERVICE_ROLE_KEY
-  SUPABASE_DB_URL          Optional Postgres URL when REST cannot read or insert.
+  SUPABASE_DB_URL          When set, the script applies the migration, then upserts.
 
-A live run with RH_API_KEY or RH_BASE64_PRIVATE_KEY unset exits 1 and stamps
-data/meta.json. It does not exit 0.
-
-Cursor: data/rh_kpi_sync_cursor.json when that file exists, otherwise
-max(timestamp_et) on the crypto sleeve, otherwise 2026-09-01. The query uses
-updated_at_start six hours before that watermark. Rows already stored with
-`RH Agentic sync order <uuid>` or `RH Agentic backfill order <uuid>` are not
-inserted again.
-
-USDC and USDC pairs are skipped. Buys store pnl_trade_usd 0. A closing leg
-stores price P&L against the open average so a later snapshot does not drop
-the gain. Fee stays in fee_usd. Equities are mapped when an order payload
-says asset_class equity; the live fetch is crypto only (this API has no
-equity orders route).
+Buys store pnl_trade_usd 0. A closing sell stores price P&L against the open
+average. why is `RH Agentic sync order <uuid>`.
 
   python3 scripts/sync_rh_kpi_trades.py --self-test
   python3 scripts/sync_rh_kpi_trades.py --dry-run
+  python3 scripts/sync_rh_kpi_trades.py --from-json fills.json
+  python3 scripts/sync_rh_kpi_trades.py --dry-run --from-json fills.json
   python3 scripts/sync_rh_kpi_trades.py
-
---dry-run maps fixture orders and does not call Robinhood or Supabase.
-Signing uses pynacl when it is installed, and cryptography otherwise.
-The Export KPI job installs pynacl before the live run.
 """
 
 from __future__ import annotations
@@ -64,6 +65,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
 CURSOR_PATH = DATA / "rh_kpi_sync_cursor.json"
+FEEDS_PATH = DATA / "rh_fills.json"
+MIGRATION_PATH = ROOT / "scripts" / "migrate_kpi_trades_order_id.sql"
 DEFAULT_URL = "https://bsnqwgbshwszbjncglqx.supabase.co"
 RH_BASE = "https://trading.robinhood.com"
 BOOTSTRAP_CURSOR = "2026-09-01T00:00:00Z"
@@ -87,7 +90,18 @@ WRITE_COLUMNS = (
     "fee_usd",
     "pnl_trade_usd",
     "why",
+    "order_id",
 )
+UPSERT_SQL = """
+insert into public.kpi_trades (
+    sleeve, timestamp_et, ticker, side, qty, avg_price,
+    notional_usd, fee_usd, pnl_trade_usd, why, order_id
+) values (
+    %(sleeve)s, %(timestamp_et)s, %(ticker)s, %(side)s, %(qty)s, %(avg_price)s,
+    %(notional_usd)s, %(fee_usd)s, %(pnl_trade_usd)s, %(why)s, %(order_id)s
+)
+on conflict (order_id) do nothing
+"""
 
 # Public example from https://docs.robinhood.com/crypto/trading/ (not a live key).
 DOC_API_KEY = "rh-api-6148effc-c0b1-486c-8940-a1d099456be6"
@@ -97,10 +111,15 @@ DOC_PATH = "/api/v1/crypto/trading/orders/"
 DOC_SIGNATURE = "q/nEtxp/P2Or3hph3KejBqnw5o9qeuQ+hYRnB56FaHbjDsNUY9KhB1asMxohDnzdVFSD7StaTqjSd9U9HvaRAw=="
 
 MISSING_RH = (
-    "RH fill sync needs GitHub Actions secrets RH_API_KEY and RH_BASE64_PRIVATE_KEY "
-    "(Robinhood Crypto Trading API key and base64 Ed25519 private key, from the Agentic "
-    "crypto account). Optional RH_ACCOUNT_NUMBER selects the v2 orders account. "
+    "RH fill sync has no fills feed and no Robinhood API credentials. "
+    "Live fills are read from the Robinhood Trading MCP, which this workflow cannot call. "
+    "Pass --from-json or add data/rh_fills.json (or RH_FILLS_PATH). "
+    "A later REST path uses RH_API_KEY and RH_BASE64_PRIVATE_KEY, optional RH_ACCOUNT_NUMBER. "
     "No orders were read and kpi_trades was not changed."
+)
+MIGRATION_HINT = (
+    "public.kpi_trades.order_id is not ready. Apply scripts/migrate_kpi_trades_order_id.sql "
+    "with SUPABASE_DB_URL before this sync. kpi_trades was not changed."
 )
 MISSING_SB = (
     "RH fill sync needs SUPABASE_SERVICE_ROLE_KEY or SUPABASE_DB_URL. "
@@ -158,13 +177,6 @@ def order_id_from_why(why: str) -> str:
     return next(iter(found))
 
 
-def known_order_ids(whys: list[str]) -> set[str]:
-    found: set[str] = set()
-    for why in whys:
-        found.update(uuids_in(why))
-    return found
-
-
 def split_symbol(order: dict) -> tuple[str, str]:
     code = str(order.get("currency_code") or "").strip().upper()
     symbol = str(order.get("symbol") or order.get("currency_pair") or "").strip().upper()
@@ -181,11 +193,19 @@ def is_usdc(ticker: str, quote: str) -> bool:
     return ticker == "USDC" or quote == "USDC"
 
 
-def sleeve_of(order: dict) -> str:
+def is_equity(order: dict) -> bool:
+    """Equities Desk owns these. This sync does not import them."""
     asset = str(order.get("asset_class") or order.get("instrument_type") or "").strip().lower()
     if asset in {"equity", "stock", "equities"}:
-        return "equities"
-    return "crypto"
+        return True
+    if str(order.get("currency_code") or "").strip():
+        return False
+    symbol = str(order.get("symbol") or "").strip()
+    return bool(symbol) and "-" not in symbol
+
+
+def is_funding(ticker: str, quote: str) -> bool:
+    return ticker in {"USDC", "USD"} or quote == "USDC"
 
 
 def fee_of(order: dict) -> Decimal:
@@ -249,17 +269,19 @@ def order_updated_at(order: dict) -> dt.datetime | None:
 
 
 def map_order(order: dict) -> dict | None:
-    """Map one filled order to a kpi_trades row. USDC and non-fills return None."""
+    """Map one filled crypto order. USDC, funding, equities, and non-fills return None."""
     if not isinstance(order, dict):
         return None
-    state = str(order.get("state") or order.get("derived_state") or "").strip().lower()
+    if is_equity(order):
+        return None
+    state = str(order.get("state") or order.get("derived_state") or "filled").strip().lower()
     if state != "filled":
         return None
     order_id = str(order.get("id") or "").strip().lower()
     if not UUID_RE.fullmatch(order_id):
         raise SyncError("filled order is missing an id")
     ticker, quote = split_symbol(order)
-    if is_usdc(ticker, quote):
+    if is_usdc(ticker, quote) or is_funding(ticker, quote):
         return None
     if not SYMBOL.fullmatch(ticker):
         raise SyncError(f"filled order {order_id} ticker {ticker!r} is not a mark symbol")
@@ -272,9 +294,8 @@ def map_order(order: dict) -> dict | None:
         raise SyncError(f"filled order {order_id} has no positive quantity")
     if price is None or price <= 0:
         raise SyncError(f"filled order {order_id} has no positive average_price")
-    sleeve = sleeve_of(order)
-    row = {
-        "sleeve": sleeve,
+    return {
+        "sleeve": "crypto",
         "timestamp_et": fill_time(order),
         "ticker": ticker,
         "side": side,
@@ -284,8 +305,8 @@ def map_order(order: dict) -> dict | None:
         "fee_usd": num_text(fee_of(order)),
         "pnl_trade_usd": "0",
         "why": WHY_SYNC.format(order_id=order_id),
+        "order_id": order_id,
     }
-    return row
 
 
 def map_orders(orders: list[dict]) -> list[dict]:
@@ -297,13 +318,24 @@ def map_orders(orders: list[dict]) -> list[dict]:
     return rows
 
 
-def drop_known(rows: list[dict], existing_whys: list[str]) -> list[dict]:
-    """Keep the first row for each Robinhood order id. Existing whys win."""
-    known = known_order_ids(existing_whys)
+def known_ids(existing: list[dict]) -> set[str]:
+    """order_id column, plus uuids already written into why by the one-shot backfill."""
+    found: set[str] = set()
+    for row in existing:
+        order_id = str(row.get("order_id") or "").strip().lower()
+        if order_id:
+            found.add(order_id)
+        found.update(uuids_in(str(row.get("why") or "")))
+    return found
+
+
+def drop_known(rows: list[dict], existing: list[dict]) -> list[dict]:
+    """Keep the first row for each Robinhood order id. Stored ids win."""
+    known = known_ids(existing)
     kept = []
     for row in rows:
-        order_id = order_id_from_why(row["why"])
-        if order_id in known:
+        order_id = str(row.get("order_id") or "").strip().lower()
+        if not order_id or order_id in known:
             continue
         known.add(order_id)
         kept.append(row)
@@ -362,8 +394,48 @@ def assign_pnl(existing: list[dict], new_rows: list[dict]) -> list[dict]:
 
 def rows_from_orders(orders: list[dict], existing: list[dict]) -> list[dict]:
     mapped = map_orders(orders)
-    fresh = drop_known(mapped, [str(row.get("why") or "") for row in existing])
+    fresh = drop_known(mapped, existing)
     return assign_pnl(existing, fresh)
+
+
+def orders_from_payload(payload) -> list[dict]:
+    """Accept a list, a results page, or a Robinhood MCP envelope."""
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        results = payload.get("results")
+        if isinstance(results, list):
+            return [item for item in results if isinstance(item, dict)]
+        data = payload.get("data")
+        if isinstance(data, dict) and isinstance(data.get("results"), list):
+            return [item for item in data["results"] if isinstance(item, dict)]
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+    raise SyncError("fills JSON must be a list or an object with results")
+
+
+def load_fills(source: str) -> list[dict]:
+    if source == "-":
+        raw = sys.stdin.read()
+    else:
+        path = Path(source)
+        if not path.is_file():
+            raise SyncError(f"Fills file was not found. {MISSING_RH}")
+        raw = path.read_text(encoding="utf-8")
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SyncError("fills JSON could not be parsed. kpi_trades was not changed.") from exc
+    return orders_from_payload(payload)
+
+
+def sql_statements(text: str) -> list[str]:
+    kept = []
+    for line in text.splitlines():
+        if line.strip().startswith("--"):
+            continue
+        kept.append(line)
+    return [part.strip() for part in "\n".join(kept).split(";") if part.strip()]
 
 
 def sign_message(private_key_b64: str, message: str) -> str:
@@ -560,6 +632,9 @@ def rest_call(base_url: str, key: str, path: str, method: str = "GET", body=None
             raw = response.read()
             return json.loads(raw.decode("utf-8")) if raw else None
     except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        if "order_id" in detail.lower() or "PGRST204" in detail:
+            raise SyncError(MIGRATION_HINT) from None
         raise SyncError(f"REST {method} kpi_trades failed with HTTP {exc.code}. kpi_trades was not changed.") from None
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
         raise SyncError("REST kpi_trades failed: network error. kpi_trades was not changed.") from exc
@@ -568,7 +643,7 @@ def rest_call(base_url: str, key: str, path: str, method: str = "GET", body=None
 def fetch_trades_rest(base_url: str, key: str) -> list[dict]:
     rows: list[dict] = []
     page = 1000
-    select = "sleeve,ticker,side,qty,avg_price,timestamp_et,why,pnl_trade_usd"
+    select = "sleeve,ticker,side,qty,avg_price,timestamp_et,why,pnl_trade_usd,order_id"
     for offset in range(0, page * 20, page):
         path = f"/rest/v1/kpi_trades?select={select}&order=timestamp_et.asc&limit={page}&offset={offset}"
         payload = rest_call(base_url, key, path)
@@ -580,15 +655,15 @@ def fetch_trades_rest(base_url: str, key: str) -> list[dict]:
     raise SyncError("REST kpi_trades exceeded 20000 rows; refusing a partial sync")
 
 
-def insert_rest(base_url: str, key: str, rows: list[dict]) -> None:
+def upsert_rest(base_url: str, key: str, rows: list[dict]) -> None:
     payload = [{column: row[column] for column in WRITE_COLUMNS} for row in rows]
     rest_call(
         base_url,
         key,
-        "/rest/v1/kpi_trades",
+        "/rest/v1/kpi_trades?on_conflict=order_id",
         method="POST",
         body=payload,
-        extra_headers={"Prefer": "return=minimal"},
+        extra_headers={"Prefer": "resolution=ignore-duplicates,return=minimal"},
     )
 
 
@@ -602,7 +677,7 @@ def connect_db(db_url: str):
 
 def fetch_trades_db(db_url: str) -> list[dict]:
     sql = """
-        select sleeve, ticker, side, qty, avg_price, timestamp_et, why, pnl_trade_usd
+        select sleeve, ticker, side, qty, avg_price, timestamp_et, why, pnl_trade_usd, order_id
         from public.kpi_trades
         order by timestamp_et asc
     """
@@ -618,26 +693,33 @@ def fetch_trades_db(db_url: str) -> list[dict]:
         raise SyncError("database read of kpi_trades failed. kpi_trades was not changed.") from exc
 
 
-def insert_db(db_url: str, rows: list[dict]) -> None:
-    sql = """
-        insert into public.kpi_trades (
-            sleeve, timestamp_et, ticker, side, qty, avg_price,
-            notional_usd, fee_usd, pnl_trade_usd, why
-        ) values (
-            %(sleeve)s, %(timestamp_et)s, %(ticker)s, %(side)s, %(qty)s, %(avg_price)s,
-            %(notional_usd)s, %(fee_usd)s, %(pnl_trade_usd)s, %(why)s
-        )
-    """
-    payload = [{column: row[column] for column in WRITE_COLUMNS} for row in rows]
+def apply_migration(db_url: str) -> None:
+    statements = sql_statements(MIGRATION_PATH.read_text(encoding="utf-8"))
+    if not statements:
+        raise SyncError("order_id migration file is empty")
     try:
         with connect_db(db_url) as conn:
             with conn.cursor() as cur:
-                cur.executemany(sql, payload)
+                for statement in statements:
+                    cur.execute(statement)
             conn.commit()
     except SyncError:
         raise
     except Exception as exc:
-        raise SyncError("database insert into kpi_trades failed. The sync did not finish.") from exc
+        raise SyncError(MIGRATION_HINT) from exc
+
+
+def upsert_db(db_url: str, rows: list[dict]) -> None:
+    payload = [{column: row[column] for column in WRITE_COLUMNS} for row in rows]
+    try:
+        with connect_db(db_url) as conn:
+            with conn.cursor() as cur:
+                cur.executemany(UPSERT_SQL, payload)
+            conn.commit()
+    except SyncError:
+        raise
+    except Exception as exc:
+        raise SyncError("database upsert into kpi_trades failed. The sync did not finish.") from exc
 
 
 def load_trades(env: dict[str, str]) -> tuple[list[dict], str]:
@@ -656,7 +738,7 @@ def load_trades(env: dict[str, str]) -> tuple[list[dict], str]:
     return fetch_trades_db(db_url), "db"
 
 
-def insert_rows(env: dict[str, str], rows: list[dict], source: str) -> None:
+def upsert_rows(env: dict[str, str], rows: list[dict], source: str) -> None:
     if not rows:
         return
     key = env.get("SUPABASE_SERVICE_ROLE_KEY") or ""
@@ -664,15 +746,15 @@ def insert_rows(env: dict[str, str], rows: list[dict], source: str) -> None:
     base_url = env.get("SUPABASE_URL") or DEFAULT_URL
     if key and source == "rest":
         try:
-            insert_rest(base_url, key, rows)
+            upsert_rest(base_url, key, rows)
             return
         except SyncError:
             if not db_url:
                 raise
-            print("REST insert failed; trying SUPABASE_DB_URL", file=sys.stderr)
+            print("REST upsert failed; trying SUPABASE_DB_URL", file=sys.stderr)
     if not db_url:
         raise SyncError(MISSING_SB)
-    insert_db(db_url, rows)
+    upsert_db(db_url, rows)
 
 
 def env_values() -> dict[str, str]:
@@ -683,17 +765,41 @@ def env_values() -> dict[str, str]:
         "RH_API_KEY",
         "RH_BASE64_PRIVATE_KEY",
         "RH_ACCOUNT_NUMBER",
+        "RH_FILLS_PATH",
     )
     return {name: (os.environ.get(name) or "").strip() for name in names}
 
 
-def require_rh(env: dict[str, str]) -> tuple[str, str, str]:
+def rh_credentials(env: dict[str, str]) -> tuple[str, str, str] | None:
     api_key = env.get("RH_API_KEY") or ""
     private_key = env.get("RH_BASE64_PRIVATE_KEY") or ""
-    account = env.get("RH_ACCOUNT_NUMBER") or ""
     if not api_key or not private_key:
-        raise SyncError(MISSING_RH)
-    return api_key, private_key, account
+        return None
+    return api_key, private_key, env.get("RH_ACCOUNT_NUMBER") or ""
+
+
+def load_order_batch(
+    env: dict[str, str],
+    from_json: str | None,
+    existing: list[dict],
+    cursor_path: Path,
+    default_feed: Path = FEEDS_PATH,
+) -> tuple[list[dict], str, str | None]:
+    """Return orders, source name, and the REST cursor when that source was used."""
+    if from_json:
+        return load_fills(from_json), "json", None
+    creds = rh_credentials(env)
+    if creds:
+        api_key, private_key, account = creds
+        cursor = resolve_cursor(existing, cursor_path)
+        orders = fetch_filled_orders(api_key, private_key, account, query_start(cursor))
+        return orders, "rest", cursor
+    feed = env.get("RH_FILLS_PATH") or ""
+    if feed:
+        return load_fills(feed), "json", None
+    if default_feed.is_file():
+        return load_fills(str(default_feed)), "json", None
+    raise SyncError(MISSING_RH)
 
 
 def public_sync_message(message: str) -> str:
@@ -722,24 +828,44 @@ def stamp_sync_failure(message: str, target: Path | None = None) -> None:
     export_kpi.stamp_export_failure(target or DATA, "error", public_sync_message(message))
 
 
-def sync(cursor_path: Path = CURSOR_PATH) -> int:
+def sync(
+    from_json: str | None = None,
+    cursor_path: Path = CURSOR_PATH,
+    default_feed: Path = FEEDS_PATH,
+) -> int:
     env = env_values()
-    api_key, private_key, account = require_rh(env)
+    explicit = from_json or ""
+    feed = env.get("RH_FILLS_PATH") or ""
+    creds = rh_credentials(env)
+    if explicit:
+        orders = load_fills(explicit)
+        batch = "json"
+        cursor = None
+    elif creds:
+        orders = None
+        batch = "rest"
+        cursor = None
+    elif feed or default_feed.is_file():
+        orders = load_fills(feed or str(default_feed))
+        batch = "json"
+        cursor = None
+    else:
+        raise SyncError(MISSING_RH)
     if not (env.get("SUPABASE_SERVICE_ROLE_KEY") or env.get("SUPABASE_DB_URL")):
         raise SyncError(MISSING_SB)
+    if env.get("SUPABASE_DB_URL"):
+        apply_migration(env["SUPABASE_DB_URL"])
     existing, source = load_trades(env)
-    cursor = resolve_cursor(existing, cursor_path)
-    start = query_start(cursor)
-    orders = fetch_filled_orders(api_key, private_key, account, start)
+    if orders is None:
+        api_key, private_key, account = creds
+        cursor = resolve_cursor(existing, cursor_path)
+        orders = fetch_filled_orders(api_key, private_key, account, query_start(cursor))
     fresh = rows_from_orders(orders, existing)
-    insert_rows(env, fresh, source)
-    nxt = advance_cursor(cursor, orders)
+    upsert_rows(env, fresh, source)
+    nxt = advance_cursor(cursor, orders) if cursor else None
     if nxt:
         write_cursor(cursor_path, nxt)
-    print(
-        f"rh sync source={source} fetched={len(orders)} inserted={len(fresh)} "
-        f"cursor={nxt or cursor}"
-    )
+    print(f"rh sync batch={batch} warehouse={source} fetched={len(orders)} upserted={len(fresh)}")
     return 0
 
 
@@ -887,12 +1013,47 @@ def self_test() -> int:
         raise SyncError("BTC fee/notional")
     if btc["timestamp_et"] != "2026-09-28T12:00:02+00:00":
         raise SyncError(f"execution timestamp {btc['timestamp_et']}")
-    qcom = by_id["77777777-7777-4777-8777-777777777777"]
-    if qcom["sleeve"] != "equities" or qcom["ticker"] != "QCOM" or qcom["pnl_trade_usd"] != "0":
-        raise SyncError("equity buy shape")
-    again = drop_known(rows, [sell["why"], btc["why"]])
-    if any(order_id_from_why(row["why"]) in {sell_id(sell), sell_id(btc)} for row in again):
+    if sell["order_id"] != "22222222-2222-4222-8222-222222222222":
+        raise SyncError("sell order_id")
+    if sell["sleeve"] != "crypto":
+        raise SyncError("sell sleeve")
+    if "77777777-7777-4777-8777-777777777777" in by_id:
+        raise SyncError("equity fill was imported")
+    again = drop_known(rows, [{"why": sell["why"]}, {"order_id": btc["order_id"]}])
+    if any(row["order_id"] in {sell["order_id"], btc["order_id"]} for row in again):
         raise SyncError("second pass inserted a known order id")
+    bare = map_order(
+        {
+            "id": "99999999-9999-4999-8999-999999999999",
+            "currency_code": "OP",
+            "side": "buy",
+            "cumulative_quantity": "2",
+            "average_price": "1.5",
+            "created_at": "2026-09-28T13:00:00Z",
+        }
+    )
+    if not bare or bare["ticker"] != "OP" or bare["order_id"] != "99999999-9999-4999-8999-999999999999":
+        raise SyncError("order JSON without state was dropped")
+    envelope = orders_from_payload(
+        {
+            "data": {
+                "rhs_account_number": "SHOULD_NOT_LEAK",
+                "results": fixture_orders(),
+            }
+        }
+    )
+    if len(envelope) != len(fixture_orders()):
+        raise SyncError("MCP envelope was not unwrapped")
+    leaked = json.dumps(rows_from_orders(envelope, existing))
+    if "SHOULD_NOT_LEAK" in leaked:
+        raise SyncError("account number leaked into a kpi_trades row")
+    if "on conflict (order_id) do nothing" not in UPSERT_SQL.lower():
+        raise SyncError("upsert is not keyed on order_id")
+    migration = MIGRATION_PATH.read_text(encoding="utf-8").lower()
+    if "add column if not exists order_id" not in migration or "unique index" not in migration:
+        raise SyncError("migration does not add a unique order_id")
+    if "rh agentic (backfill|sync) order" not in migration:
+        raise SyncError("migration does not copy tonight's backfill uuid onto order_id")
     message = request_message(DOC_API_KEY, DOC_TIMESTAMP, DOC_PATH, "GET")
     if message != f"{DOC_API_KEY}{DOC_TIMESTAMP}{DOC_PATH}GET":
         raise SyncError("GET signature message")
@@ -919,12 +1080,12 @@ def self_test() -> int:
     if "read-only" in MISSING_RH.lower() or "disk full" in MISSING_RH.lower():
         raise SyncError("missing-secret copy must not look like a warehouse outage")
     try:
-        require_rh({})
+        load_order_batch({}, None, [], Path("/no/such/cursor.json"), Path("/no/such/rh_fills.json"))
     except SyncError as exc:
-        if "RH_API_KEY" not in str(exc) or "RH_BASE64_PRIVATE_KEY" not in str(exc):
+        if "RH_API_KEY" not in str(exc) or "rh_fills.json" not in str(exc):
             raise
     else:
-        raise SyncError("missing RH secrets did not fail")
+        raise SyncError("missing RH feed did not fail")
     from tempfile import TemporaryDirectory
 
     with TemporaryDirectory() as tmp:
@@ -972,10 +1133,6 @@ def self_test() -> int:
     return 0
 
 
-def sell_id(row: dict) -> str:
-    return order_id_from_why(row["why"])
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
@@ -986,17 +1143,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Print fixture rows and do not call Robinhood or Supabase",
+        help="Print mapped rows and do not call Robinhood or Supabase",
+    )
+    parser.add_argument(
+        "--from-json",
+        metavar="PATH",
+        help="Filled orders JSON. Use - to read stdin.",
     )
     args = parser.parse_args(argv)
     try:
         if args.self_test:
             return self_test()
         if args.dry_run:
-            print(json.dumps(fixture_rows(), indent=2))
-            print("dry-run: fixture rows only; no insert", file=sys.stderr)
+            orders = load_fills(args.from_json) if args.from_json else fixture_orders()
+            print(json.dumps(rows_from_orders(orders, []), indent=2))
+            print("dry-run: no upsert", file=sys.stderr)
             return 0
-        return sync()
+        return sync(from_json=args.from_json)
     except SyncError as exc:
         print(str(exc), file=sys.stderr)
         if args.self_test or args.dry_run:

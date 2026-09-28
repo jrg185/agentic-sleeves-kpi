@@ -5,8 +5,11 @@ name: Export KPI
 # A failed sync or refresh does not commit KPI JSON. It stamps data/meta.json
 # and the failure step publishes that file only, so a read-only or full disk
 # stays visible.
-# RH_API_KEY and RH_BASE64_PRIVATE_KEY are required for the sync. RH_ACCOUNT_NUMBER
-# is optional (v2 orders). The sync only signs GET requests. It does not place orders.
+# The sync reads a fills JSON feed, or GET /crypto/trading/orders when
+# RH_API_KEY and RH_BASE64_PRIVATE_KEY are set. There is no Robinhood login.
+# If neither a feed nor those keys exist, the step stamps meta.json and fails.
+# Crypto sleeve only. RH_ACCOUNT_NUMBER is optional for the v2 orders route.
+# RH_FILLS_PATH is an optional JSON file. data/rh_fills.json is the default feed.
 # Marks: public Coinbase ticker (crypto) and Yahoo chart (equities).
 # FINNHUB_API_KEY, COINSTATS_API_KEY, and ALPHA_VANTAGE_API_KEY are optional.
 # data/** pushes are ignored so the export commit does not run this job again.
@@ -61,9 +64,12 @@ jobs:
           RH_API_KEY: ${{ secrets.RH_API_KEY }}
           RH_BASE64_PRIVATE_KEY: ${{ secrets.RH_BASE64_PRIVATE_KEY }}
           RH_ACCOUNT_NUMBER: ${{ secrets.RH_ACCOUNT_NUMBER }}
+          RH_FILLS_PATH: ${{ secrets.RH_FILLS_PATH }}
         run: |
-          python3 -m pip install --disable-pip-version-check --break-system-packages 'pynacl>=1.5,<2'
           python3 scripts/sync_rh_kpi_trades.py --self-test
+          if [ -n "$RH_API_KEY" ] && [ -n "$RH_BASE64_PRIVATE_KEY" ]; then
+            python3 -m pip install --disable-pip-version-check --break-system-packages 'pynacl>=1.5,<2'
+          fi
           python3 scripts/sync_rh_kpi_trades.py
 
       - name: Refresh kpi_sleeve_snapshots
