@@ -336,7 +336,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.043033,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic backfill order 6ab9abd8-4d32-463d-b90b-fe39c06179f4",
+    "why": "artifact buy top-up to $26.50 (held leftover after prior +15% scale); conv 0.88; +28.66% 24h vol z=0.92",
     "running_pnl_frac": 0.020794,
     "running_balance_frac": 1.020794
   },
@@ -347,7 +347,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.078233,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic backfill order 6ab9bb8c-8f65-48fd-8d9f-ca6fd20fee0c",
+    "why": "artifact buy $23.69 conv 0.79 (+3.32% 24h vol z=4.21)",
     "running_pnl_frac": 0.020794,
     "running_balance_frac": 1.020794
   },
@@ -358,7 +358,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.063233,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic backfill order 6ab9bb8d-42b8-4692-878b-be28b01a4289",
+    "why": "artifact buy $19.15 conv 0.64 (+2.76% 24h vol z=1.32)",
     "running_pnl_frac": 0.020794,
     "running_balance_frac": 1.020794
   },
@@ -369,7 +369,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.0586,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic backfill order 6ab9bb8f-a80a-4bde-894e-efe928a36adf",
+    "why": "artifact buy $17.75 conv 0.59 (+2.91% 24h vol z=0.68)",
     "running_pnl_frac": 0.020794,
     "running_balance_frac": 1.020794
   },
@@ -380,7 +380,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.058033,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic backfill order 6ab9bb90-0bdc-4ee4-86c9-64c8927a8e75",
+    "why": "artifact buy $17.58 conv 0.59 (+2.30% 24h vol z=0.84)",
     "running_pnl_frac": 0.020794,
     "running_balance_frac": 1.020794
   },
@@ -391,7 +391,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.012,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic backfill order 6ab9bb92-bf23-4804-aba7-bf4893f01f12",
+    "why": "artifact buy top-up to $30; conv 1.0; +29.33% 24h vol z=2.44",
     "running_pnl_frac": 0.020794,
     "running_balance_frac": 1.020794
   },
@@ -402,7 +402,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.010167,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic backfill order 6ab9bb92-61fe-4271-8cb4-1c82b3de64e2",
+    "why": "artifact buy top-up to $30; conv 1.0; +13.57% 24h vol z=2.61",
     "running_pnl_frac": 0.020794,
     "running_balance_frac": 1.020794
   },
@@ -413,7 +413,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.008667,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic backfill order 6ab9bb95-5277-4c2d-bf51-616b48fc4f0c",
+    "why": "artifact buy top-up to $30; conv 1.0; +13.84% 24h vol z=4.77",
     "running_pnl_frac": 0.020794,
     "running_balance_frac": 1.020794
   },
@@ -424,7 +424,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.0105,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic backfill order 6ab9bb95-47c9-496b-9a49-dc6ce316a7c4",
+    "why": "artifact buy top-up to $25.24; conv 0.84; +9.22% 24h vol z=1.43",
     "running_pnl_frac": 0.020794,
     "running_balance_frac": 1.020794
   },
@@ -435,7 +435,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.0886,
     "pnl_frac_of_book": 0.046283,
-    "why": "RH Agentic backfill order 6ab9bce1-d180-4ca2-b174-44d7f90ccd58",
+    "why": "Joe exit \u2014 missed peak / downside",
     "running_pnl_frac": 0.067077,
     "running_balance_frac": 1.067077
   },
@@ -446,7 +446,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.053167,
     "pnl_frac_of_book": 0.005873,
-    "why": "RH Agentic backfill order 6ab9c231-712f-4b61-87d4-e2acb7a75df9",
+    "why": "profit-exit model: trail through; leftover full exit",
     "running_pnl_frac": 0.07295,
     "running_balance_frac": 1.07295
   },
@@ -457,7 +457,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.0544,
     "pnl_frac_of_book": 0.00395,
-    "why": "RH Agentic backfill order 6ab9c232-59c1-419f-a7ee-85d734f961df",
+    "why": "profit-exit +5% reanalyze half-scale",
     "running_pnl_frac": 0.0769,
     "running_balance_frac": 1.0769
   },
@@ -468,7 +468,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.051733,
     "pnl_frac_of_book": 0.00175,
-    "why": "RH Agentic backfill order 6ab9c232-d662-4611-8009-f7ba48612b71",
+    "why": "profit-exit +5% reanalyze half-scale (gate)",
     "running_pnl_frac": 0.07865,
     "running_balance_frac": 1.07865
   },
@@ -479,7 +479,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.1039,
     "pnl_frac_of_book": 0.003049,
-    "why": "RH Agentic backfill order 6ab9cbc1-b5ab-4951-a49a-597bb68619a3",
+    "why": "profit-exit trail breach (bc-b76ce034 / PR#50); full exit not half",
     "running_pnl_frac": 0.081699,
     "running_balance_frac": 1.081699
   },
