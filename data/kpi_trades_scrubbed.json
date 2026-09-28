@@ -847,6 +847,39 @@
     "running_balance_frac": 1.098528
   },
   {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T06:47:38.161938+00:00",
+    "ticker": "RENDER",
+    "side": "sell",
+    "notional_frac_of_book": 0.0606,
+    "pnl_frac_of_book": -0.00549,
+    "why": "RH Agentic sync order 6aba0d8a-784f-4c4b-a722-7baa3004274d",
+    "running_pnl_frac": 0.093038,
+    "running_balance_frac": 1.093038
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T06:47:50.487288+00:00",
+    "ticker": "HBAR",
+    "side": "buy",
+    "notional_frac_of_book": 0.0725,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6aba0d96-8f03-430f-b212-9d7978c50228",
+    "running_pnl_frac": 0.093038,
+    "running_balance_frac": 1.093038
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T06:47:51.819622+00:00",
+    "ticker": "ORCA",
+    "side": "buy",
+    "notional_frac_of_book": 0.0595,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6aba0d97-c95e-415d-b31b-73d54892d52c",
+    "running_pnl_frac": 0.093038,
+    "running_balance_frac": 1.093038
+  },
+  {
     "sleeve": "equities",
     "timestamp_et": "2026-09-25T19:37:00+00:00",
     "ticker": "QCOM",
