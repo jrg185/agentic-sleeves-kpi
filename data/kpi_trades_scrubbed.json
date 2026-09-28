@@ -17,7 +17,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.082733,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab7f4a2-5444-4593-84ea-e78f57dc0cf6",
+    "why": "backfill from RH",
     "running_pnl_frac": 0.0,
     "running_balance_frac": 1.0
   },
@@ -39,7 +39,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.081667,
     "pnl_frac_of_book": -0.001043,
-    "why": "RH Agentic sync order 6ab80d4d-9abc-4c12-aeb6-0b50c9728b1b",
+    "why": "backfill from RH \u2014 closed",
     "running_pnl_frac": -0.002876,
     "running_balance_frac": 0.997124
   },
@@ -61,7 +61,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.082967,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab82f87-8b24-43ab-bd35-dc0099973cf4",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.002876,
     "running_balance_frac": 0.997124
   },
@@ -83,7 +83,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.082967,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab82fa5-063c-4170-81fe-063f93004a78",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.002876,
     "running_balance_frac": 0.997124
   },
@@ -105,7 +105,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.082933,
     "pnl_frac_of_book": -8.1e-05,
-    "why": "RH Agentic sync order 6ab82fe8-9ea7-4b36-bda5-7e0f2bcb650d",
+    "why": "backfill from RH \u2014 leftover 0.2062 hold",
     "running_pnl_frac": -0.00379,
     "running_balance_frac": 0.99621
   },
@@ -127,7 +127,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.091567,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab83e3e-35fa-43b3-a7cc-00d9e7baf29f",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.00379,
     "running_balance_frac": 0.99621
   },
@@ -149,7 +149,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.0905,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab83e45-706f-483e-b3b3-d79166eec43a",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.00379,
     "running_balance_frac": 0.99621
   },
@@ -171,7 +171,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.084633,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab85bb0-3c0b-42d9-b507-2a9afe336520",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.00379,
     "running_balance_frac": 0.99621
   },
@@ -193,7 +193,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.098867,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab86899-7f69-4276-a23c-1ce2eeb4529a",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.00379,
     "running_balance_frac": 0.99621
   },
@@ -215,7 +215,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.0615,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab891d9-3bc4-4147-a4ca-590880cd4235",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.00379,
     "running_balance_frac": 0.99621
   },
@@ -248,7 +248,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.0189,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab8a134-0407-4765-bde6-765a54c745b5",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.00379,
     "running_balance_frac": 0.99621
   },
@@ -259,7 +259,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.0092,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab8a134-5ca4-4573-a8cc-395dc0800435",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.00379,
     "running_balance_frac": 0.99621
   },
@@ -281,7 +281,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.059267,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab8bd90-1fb9-4171-95eb-ee588c711ef0",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.00379,
     "running_balance_frac": 0.99621
   },
@@ -303,7 +303,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.064367,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab8bd91-b36f-498b-885c-0c8b60c5cef1",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.00379,
     "running_balance_frac": 0.99621
   },
@@ -325,7 +325,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.074433,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab8caba-2c39-4da1-ba28-ac8c86cb7630",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.00379,
     "running_balance_frac": 0.99621
   },
@@ -358,7 +358,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.0634,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab8cabb-6256-43fb-9c31-4a9be1c2fb04",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.00379,
     "running_balance_frac": 0.99621
   },
@@ -369,7 +369,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.070667,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab8cabb-5346-45a1-bb70-59d4df659c8b",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.00379,
     "running_balance_frac": 0.99621
   },
@@ -391,7 +391,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.066133,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab8e787-c66a-42ab-bb42-0ef6d9904873",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.00379,
     "running_balance_frac": 0.99621
   },
@@ -413,7 +413,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.0241,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab8f598-75c9-4dd6-a59f-6ee73c62d2eb",
+    "why": "backfill from RH",
     "running_pnl_frac": -0.00379,
     "running_balance_frac": 0.99621
   },
@@ -435,7 +435,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.055267,
     "pnl_frac_of_book": 0.013842,
-    "why": "RH Agentic sync order 6ab92101-90e6-4484-98b0-bb8bc4e740dd",
+    "why": "+15% scale | exit: leftover 0.1031 hold",
     "running_pnl_frac": 0.023302,
     "running_balance_frac": 1.023302
   },
@@ -457,7 +457,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.054233,
     "pnl_frac_of_book": 0.007362,
-    "why": "RH Agentic sync order 6ab9493d-e1d5-4624-bb31-12b72fcc3a72",
+    "why": "+15% scale",
     "running_pnl_frac": 0.038358,
     "running_balance_frac": 1.038358
   },
@@ -479,7 +479,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.089767,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab96698-524f-44ad-afe6-ebd45e42558d",
+    "why": "artifact buy",
     "running_pnl_frac": 0.038358,
     "running_balance_frac": 1.038358
   },
@@ -512,7 +512,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.051533,
     "pnl_frac_of_book": 0.006676,
-    "why": "RH Agentic sync order 6ab990fc-905a-4cc9-ba68-26081082dba0",
+    "why": "+15% scale",
     "running_pnl_frac": 0.052217,
     "running_balance_frac": 1.052217
   },
@@ -523,7 +523,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.089367,
     "pnl_frac_of_book": 0.001917,
-    "why": "RH Agentic sync order 6ab990fc-b293-49c1-b86c-9d22ebb3d30a",
+    "why": "rotation small gainer",
     "running_pnl_frac": 0.054134,
     "running_balance_frac": 1.054134
   },
@@ -556,7 +556,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.0903,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab99109-2d9d-47f3-b488-218c0d0766b6",
+    "why": "backfill from RH",
     "running_pnl_frac": 0.054134,
     "running_balance_frac": 1.054134
   },
@@ -567,7 +567,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.0898,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab99109-2356-4c85-9c1b-fcf9e6381fdc",
+    "why": "backfill from RH",
     "running_pnl_frac": 0.054134,
     "running_balance_frac": 1.054134
   },
@@ -589,7 +589,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.066633,
     "pnl_frac_of_book": -0.003995,
-    "why": "RH Agentic sync order 6ab99e57-6f1d-4c57-88b6-4f9ceee7d30a",
+    "why": "artifact sell exit (24h -2.20% vol z=1.47 conv 0.63) | exit: closed",
     "running_pnl_frac": 0.045472,
     "running_balance_frac": 1.045472
   },
@@ -622,7 +622,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.091233,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab99e5e-f7fd-4e03-8a53-aebedee55cc0",
+    "why": "artifact buy $27.64 conv 0.92 (+7.73% 24h vol z=2.99) | exit: artifact sell/exit | day kill -10% | rails force cut",
     "running_pnl_frac": 0.045472,
     "running_balance_frac": 1.045472
   },
@@ -633,7 +633,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.074567,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab99e5e-80a6-4ece-9b9c-a754cb82ec84",
+    "why": "artifact buy $22.59 conv 0.75 (+2.10% 24h vol z=5.96) | exit: artifact sell/exit | day kill -10% | rails force cut",
     "running_pnl_frac": 0.045472,
     "running_balance_frac": 1.045472
   },
@@ -655,7 +655,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.073533,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab99e60-415f-4d3d-9531-9dad1a2fc266",
+    "why": "artifact buy $22.27 conv 0.74 (+8.28% 24h vol z=0.55) | exit: artifact sell/exit | day kill -10% | rails force cut",
     "running_pnl_frac": 0.045472,
     "running_balance_frac": 1.045472
   },
@@ -820,7 +820,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.071533,
     "pnl_frac_of_book": -0.003024,
-    "why": "RH Agentic sync order 6ab9e3f5-164e-4c80-b5ae-0c9efe6c53ab",
+    "why": "artifact sell (24h -3.60% vol z=4.35 conv 0.80) | exit: closed flat",
     "running_pnl_frac": 0.103353,
     "running_balance_frac": 1.103353
   },
@@ -831,7 +831,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.087967,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6ab9f181-de63-4d8b-92b4-12435f97125b",
+    "why": "artifact buy $26.65 conv 0.888 (+20.85% 24h vol z=0.98) | exit: artifact sell/exit | day kill -10% | rails force cut; +15% scale once; +5% reanalyze",
     "running_pnl_frac": 0.103353,
     "running_balance_frac": 1.103353
   },
@@ -842,7 +842,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.075533,
     "pnl_frac_of_book": -0.004825,
-    "why": "RH Agentic sync order 6aba01f5-a495-4a26-907b-b7ba4d4d5bb4",
+    "why": "artifact sell (24h -5.64% vol z=1.06 conv 0.704) | exit: closed flat",
     "running_pnl_frac": 0.098528,
     "running_balance_frac": 1.098528
   },
@@ -853,7 +853,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.0606,
     "pnl_frac_of_book": -0.00549,
-    "why": "RH Agentic sync order 6aba0d8a-784f-4c4b-a722-7baa3004274d",
+    "why": "artifact sell (24h -4.26% vol z=1.61 conv 0.707) | exit: closed flat",
     "running_pnl_frac": 0.093038,
     "running_balance_frac": 1.093038
   },
@@ -864,7 +864,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.0725,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6aba0d96-8f03-430f-b212-9d7978c50228",
+    "why": "artifact buy $21.95 conv 0.732 (+3.01% 24h vol z=2.39); top-up held lot | exit: artifact sell/exit | day kill -10% | rails force cut; +15% scale once; +5% reanalyze",
     "running_pnl_frac": 0.093038,
     "running_balance_frac": 1.093038
   },
@@ -875,7 +875,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.0595,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6aba0d97-c95e-415d-b31b-73d54892d52c",
+    "why": "artifact buy $18.04 conv 0.601 (+2.58% 24h vol z=0.92) | exit: artifact sell/exit | day kill -10% | rails force cut; +15% scale once; +5% reanalyze",
     "running_pnl_frac": 0.093038,
     "running_balance_frac": 1.093038
   },
@@ -886,7 +886,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.054633,
     "pnl_frac_of_book": -0.003925,
-    "why": "RH Agentic sync order 6aba1e01-4085-4874-994f-468d9a04e153",
+    "why": "artifact sell (24h -5.70% vol z=1.81 conv 0.766) | exit: closed flat",
     "running_pnl_frac": 0.089113,
     "running_balance_frac": 1.089113
   },
@@ -897,7 +897,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.050967,
     "pnl_frac_of_book": 0.001209,
-    "why": "RH Agentic sync order 6aba1e02-7fc5-40f9-87d6-c6bc5b892d56",
+    "why": "profit-exit trail breach (trail 0.082063; mark through) | exit: closed flat",
     "running_pnl_frac": 0.090322,
     "running_balance_frac": 1.090322
   },
@@ -908,7 +908,7 @@
     "side": "sell",
     "notional_frac_of_book": 0.075833,
     "pnl_frac_of_book": 0.008024,
-    "why": "RH Agentic sync order 6aba29bd-3529-4784-92d6-24145a1ef47c",
+    "why": "profit-exit +5% reanalyze half-scale (+11.53% vs 0.09695; no profit_exits model; short-hold) | exit: leftover 210.01 trail 0.10459 | +15% failsafe 0.11149",
     "running_pnl_frac": 0.098346,
     "running_balance_frac": 1.098346
   },
@@ -919,7 +919,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.085,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6aba3911-e796-48f6-8e48-88ae7769fa35",
+    "why": "artifact buy $25.51 conv 0.850 (+6.86% 24h vol z=2.43) | exit: artifact sell/exit | day kill -10% | rails force cut; +15% scale once; +5% reanalyze",
     "running_pnl_frac": 0.098346,
     "running_balance_frac": 1.098346
   },
@@ -930,7 +930,7 @@
     "side": "buy",
     "notional_frac_of_book": 0.085633,
     "pnl_frac_of_book": 0.0,
-    "why": "RH Agentic sync order 6aba3912-441d-4852-b476-860c090bf350",
+    "why": "artifact buy $25.85 conv 0.862 (+28.25% 24h vol z=0.64; ATR%~19%) | exit: artifact sell/exit | day kill -10% | rails force cut; +15% scale once; +5% reanalyze; short-hold",
     "running_pnl_frac": 0.098346,
     "running_balance_frac": 1.098346
   },
@@ -941,9 +941,20 @@
     "side": "sell",
     "notional_frac_of_book": 0.0472,
     "pnl_frac_of_book": 0.012134,
-    "why": "RH Agentic sync order 6aba45f8-1b96-4267-bdbf-2133fbf520f9",
+    "why": "profit-exit +5% reanalyze half-scale (+9.72% vs 201.928; no profit_exits model; short-hold) | exit: leftover 0.0636 trail 212.02 | +15% failsafe 232.22",
     "running_pnl_frac": 0.11048,
     "running_balance_frac": 1.11048
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T11:52:32.975629+00:00",
+    "ticker": "QNT",
+    "side": "sell",
+    "notional_frac_of_book": 0.050439,
+    "pnl_frac_of_book": 0.015352,
+    "why": "RH Agentic sync order 6aba5500-75b3-42cf-9fa8-a17a8bf82583",
+    "running_pnl_frac": 0.125832,
+    "running_balance_frac": 1.125832
   },
   {
     "sleeve": "equities",
