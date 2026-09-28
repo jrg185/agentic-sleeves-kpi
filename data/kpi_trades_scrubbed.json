@@ -825,6 +825,17 @@
     "running_balance_frac": 1.103353
   },
   {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T04:48:01.714648+00:00",
+    "ticker": "GRT",
+    "side": "buy",
+    "notional_frac_of_book": 0.087967,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab9f181-de63-4d8b-92b4-12435f97125b",
+    "running_pnl_frac": 0.103353,
+    "running_balance_frac": 1.103353
+  },
+  {
     "sleeve": "equities",
     "timestamp_et": "2026-09-25T19:37:00+00:00",
     "ticker": "QCOM",
