@@ -1,8 +1,12 @@
 name: Export KPI
 
-# Refreshes public.kpi_sleeve_snapshots, then reads the scrubbed views.
-# A failed refresh does not commit KPI JSON. It stamps data/meta.json and the
-# failure step publishes that file only, so a read-only or full disk stays visible.
+# Syncs filled Robinhood crypto orders into public.kpi_trades, refreshes
+# public.kpi_sleeve_snapshots, then reads the scrubbed views.
+# A failed sync or refresh does not commit KPI JSON. It stamps data/meta.json
+# and the failure step publishes that file only, so a read-only or full disk
+# stays visible.
+# RH_API_KEY and RH_BASE64_PRIVATE_KEY are required for the sync. RH_ACCOUNT_NUMBER
+# is optional (v2 orders). The sync only signs GET requests. It does not place orders.
 # Marks: public Coinbase ticker (crypto) and Yahoo chart (equities).
 # FINNHUB_API_KEY, COINSTATS_API_KEY, and ALPHA_VANTAGE_API_KEY are optional.
 # data/** pushes are ignored so the export commit does not run this job again.
@@ -38,6 +42,9 @@ jobs:
       - name: Position math
         run: python3 scripts/refresh_kpi_snapshots.py --self-test
 
+      - name: RH fill mapper
+        run: python3 scripts/sync_rh_kpi_trades.py --self-test
+
   export:
     needs: check
     if: github.event_name != 'pull_request'
@@ -45,6 +52,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Sync RH fills into kpi_trades
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          RH_API_KEY: ${{ secrets.RH_API_KEY }}
+          RH_BASE64_PRIVATE_KEY: ${{ secrets.RH_BASE64_PRIVATE_KEY }}
+          RH_ACCOUNT_NUMBER: ${{ secrets.RH_ACCOUNT_NUMBER }}
+        run: |
+          python3 -m pip install --disable-pip-version-check --break-system-packages 'pynacl>=1.5,<2'
+          python3 scripts/sync_rh_kpi_trades.py --self-test
+          python3 scripts/sync_rh_kpi_trades.py
 
       - name: Refresh kpi_sleeve_snapshots
         env:
@@ -69,6 +89,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- data/kpi_summary.json data/kpi_trades_scrubbed.json data/models_oos.json data/meta.json
+          if [ -f data/rh_kpi_sync_cursor.json ]; then
+            git add -- data/rh_kpi_sync_cursor.json
+          fi
           if git diff --cached --quiet; then
             echo "KPI JSON unchanged."
           else

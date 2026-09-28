@@ -54,9 +54,9 @@ Pages serves that committed JSON. The browser only fetches `data/*.json`.
 
 Workflow: [`.github/workflows/export-kpi.yml`](.github/workflows/export-kpi.yml) (same bytes as [`scripts/export-kpi.yml`](scripts/export-kpi.yml)).
 
-- `workflow_dispatch`, pull requests (position math only), and pushes to `main` other than `data/**`
+- `workflow_dispatch`, pull requests (position math and the RH fill mapper), and pushes to `main` other than `data/**`
 - schedule: every 15 minutes on weekdays from 13:00–21:45 UTC (covers 9:30am–4:00pm ET in both EDT and EST), and hourly outside that window including weekends
-- Refresh `kpi_sleeve_snapshots`, then export. A failed refresh does not commit KPI JSON
+- Sync filled Robinhood crypto orders into `public.kpi_trades`, refresh `kpi_sleeve_snapshots`, then export. A failed sync or refresh does not commit KPI JSON
 - Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. `SUPABASE_DB_URL` is optional
 - Crypto marks: public Coinbase ticker, then Yahoo `{SYMBOL}-USD`. Equities marks: Finnhub when `FINNHUB_API_KEY` is set, then Yahoo chart. CoinStats and Alpha Vantage are later fallbacks when those keys are set
 - Writes `data/kpi_summary.json`, `data/kpi_trades_scrubbed.json`, `data/models_oos.json`, and `data/meta.json` when they changed
@@ -69,13 +69,14 @@ The board reads `meta.fetched_at` as **Last refreshed** in America/New_York, and
 
 `public.kpi_summary` is a view over the latest `public.kpi_sleeve_snapshots` row. Re-exporting JSON cannot move `as_of` by itself.
 
-The writer is in this repo: `scripts/refresh_kpi_snapshots.py`. Export KPI runs it first. It reads `public.kpi_trades` (qty and price), marks open names from public Coinbase and Yahoo quotes, and INSERTs a new snapshot with `as_of` set to now. It does not place orders and it does not change the table schema. Sibling `upsert-warehouse` Actions in `agentic-crypto-signals` and `agentic-equity-signals` write `bars`, `features`, `labels`, and `model_runs`. They are not the sleeve MTM writer.
+The writer is in this repo: `scripts/refresh_kpi_snapshots.py`. Export KPI runs it after the Robinhood fill sync. It reads `public.kpi_trades` (qty and price), marks open names from public Coinbase and Yahoo quotes, and INSERTs a new snapshot with `as_of` set to now. It does not place orders and it does not change the table schema. Sibling `upsert-warehouse` Actions in `agentic-crypto-signals` and `agentic-equity-signals` write `bars`, `features`, `labels`, and `model_runs`. They are not the sleeve MTM writer.
 
 Order:
 
-1. Refresh inserts `kpi_sleeve_snapshots`.
-2. Export reads `kpi_summary` and `kpi_trades_scrubbed` and commits JSON only if `as_of` is within 15 minutes.
-3. Pages shows that `as_of`.
+1. Sync inserts new Robinhood fills into `kpi_trades`.
+2. Refresh inserts `kpi_sleeve_snapshots`.
+3. Export reads `kpi_summary` and `kpi_trades_scrubbed` and commits JSON only if `as_of` is within 15 minutes.
+4. Pages shows that `as_of`.
 
 If the INSERT fails because the database is read-only (25006) or the disk is full, the script leaves the KPI numbers alone and stamps `meta.warehouse_status`. The chip reads **Warehouse read-only** or **Warehouse disk full**, with copy `snapshot frozen at` the last committed sleeve time. The Action publishes that meta file and stays red.
 
@@ -137,8 +138,21 @@ Add these repository secrets (Settings → Secrets and variables → Actions). D
 | `FINNHUB_API_KEY` | Optional equities mark. Yahoo chart is the public fallback. |
 | `COINSTATS_API_KEY` | Optional crypto mark after Coinbase and Yahoo. |
 | `ALPHA_VANTAGE_API_KEY` | Optional equities mark after Finnhub and Yahoo. |
+| `RH_API_KEY` | Robinhood Crypto Trading API key (`x-api-key`). Create it on the Agentic crypto account. The sync signs GET order requests only. |
+| `RH_BASE64_PRIVATE_KEY` | Base64 Ed25519 private-key seed for that API key. Never printed. |
+| `RH_ACCOUNT_NUMBER` | Optional. When set, list v2 orders for that crypto account. |
 
 Public Coinbase and Yahoo marks do not need those quote keys.
+
+### RH fill sync
+
+`scripts/sync_rh_kpi_trades.py` runs before the snapshot refresh. `agentic-crypto-signals` has no Robinhood client, and this repo had no RH secret names, so the Action uses the three names above.
+
+The script reads filled crypto orders since a watermark (`data/rh_kpi_sync_cursor.json`, else `max(timestamp_et)` on the crypto sleeve). It skips USDC and USDC pairs. Each new row is `sleeve=crypto`, with `why` set to `RH Agentic sync order <uuid>`. A row whose `why` already contains that uuid, including `RH Agentic backfill order <uuid>`, is not inserted again. Buys store `pnl_trade_usd` 0. A closing sell stores price P&L against the open average. The script does not place orders.
+
+Equity payloads with `asset_class=equity` map to `sleeve=equities` in the self-test. The live fetch is crypto only. This API has no equity orders route.
+
+After this is merged, run **Actions → Export KPI → Run workflow** once. A new Agentic crypto fill then shows on https://jrg185.github.io/the-book/ within one schedule window: 15 minutes during the cash-session cron, otherwise the hourly cron. The run stays red until `RH_API_KEY` and `RH_BASE64_PRIVATE_KEY` are set, and it stamps `data/meta.json` instead of exiting 0.
 
 After the Supabase secrets are saved, run **Actions → Export KPI → Run workflow**. A successful export sets `meta.source` to `supabase` and replaces the KPI JSON. `fixtures/` and `data/models.json` stay as they are.
 
@@ -154,6 +168,8 @@ The site is https://jrg185.github.io/the-book/
 
 ```bash
 python3 scripts/refresh_kpi_snapshots.py --self-test
+python3 scripts/sync_rh_kpi_trades.py --self-test
+python3 scripts/sync_rh_kpi_trades.py --dry-run
 python3 scripts/export_kpi.py --install-sample
 python3 -m py_compile scripts/export_kpi.py
 python3 -m unittest scripts/test_export_status.py
