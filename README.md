@@ -81,7 +81,7 @@ If the INSERT fails because the database is read-only (25006) or the disk is ful
 
 When `meta.source` is `supabase` and the latest sleeve `as_of` is older than 60 minutes, and the warehouse did not report read-only or disk full, the chip is **MTM stale**. Cache-busting the JSON does not make that snapshot current.
 
-There is no Sheets API key and no Google CSV export in this path. A sheet may feed Supabase somewhere else; this site does not.
+Export KPI does not read a Google Sheet. A one-shot notes backfill can copy human Why/Notes into `kpi_trades` from a CSV export of the ledger sheet. That script is not on the export path. See [Notes backfill](#notes-backfill).
 
 The live `kpi_summary` view uses warehouse names. Export remaps them onto the page shape before writing JSON: `running_bal_vs_start` → `running_balance_frac`, `pnl_pct_of_book` → `running_pnl_frac`, `notes` → `note`. `sleeve`, `as_of`, `day_kill_pct`, `day_target_pct`, and `kill_headroom_frac` stay as they are. When both a warehouse book ratio and a cash residual are present, the warehouse ratio wins.
 
@@ -113,9 +113,11 @@ Optional seed override on a row: `start`, `seed`, `start_usd`, `seed_usd`, or `b
 | `side` | `buy` or `sell` |
 | `qty` | Quantity |
 | `pnl_frac` | Trade P&L ÷ sleeve seed |
-| `running_pnl_frac` | Running P&L ÷ sleeve seed |
-| `running_balance_frac` | Book at that fill ÷ sleeve seed, where book = start + running P&L at the row. Not cash leftover. |
-| `why` | Short reason. No PII. |
+| `running_pnl_frac` | Cumulative realized P&L through that fill ÷ sleeve seed. Export regenerates this per sleeve in timestamp order. Crypto seed $300, equities seed $500. |
+| `running_balance_frac` | Book at that fill ÷ sleeve seed, where book = start + cumulative realized P&L. Not cash leftover and not open-position mark-to-market. |
+| `why` | Full note. No `left()` truncation. No PII. A machine `RH Agentic backfill order <uuid>` string is not the human note. |
+
+Export always recomputes `running_pnl_frac` and `running_balance_frac` from warehouse trade P&L before writing JSON. It does not copy a sheet running balance. When the scrubbed row includes `pnl_trade_usd`, the sum is dollars then ÷ seed. Otherwise it sums `pnl_frac_of_book` (each value is already trade P&L ÷ seed). `why` is written in full. If `why` is a machine order string and `notes` is human, the JSON `why` is the notes text.
 
 The exporter drops `email`, `phone`, `order_id`, `account_id`, `user_id`, `api_key`, `service_role`, `secret`, `password`, `token`, `ssn`, and `address` if a view ever returns them. It also drops JWT-shaped strings.
 
@@ -154,8 +156,10 @@ The site is https://jrg185.github.io/the-book/
 
 ```bash
 python3 scripts/refresh_kpi_snapshots.py --self-test
+python3 scripts/export_kpi.py --self-test
+python3 scripts/backfill_notes_from_sheet.py --self-test
 python3 scripts/export_kpi.py --install-sample
-python3 -m py_compile scripts/export_kpi.py
+python3 -m py_compile scripts/export_kpi.py scripts/backfill_notes_from_sheet.py
 python3 -m unittest scripts/test_export_status.py
 python3 -m http.server 8765
 ```
@@ -179,3 +183,51 @@ limit 6;
 ```
 
 Open http://127.0.0.1:8765/
+
+## Tape running ledger
+
+`scripts/export_kpi.py` fills Running P&L and Running balance on every export, including before the SQL view is updated. The view should match that math so a direct `select` from `kpi_trades_scrubbed` is the same ledger.
+
+Apply [`scripts/migrations/20260928_kpi_trades_running_ledger.sql`](scripts/migrations/20260928_kpi_trades_running_ledger.sql) on **agentic-signals** (`bsnqwgbshwszbjncglqx`):
+
+1. Supabase → SQL editor → paste the file → Run.
+2. The script keeps the previous view as `public.kpi_trades_scrubbed_prev` the first time, then `create or replace`s `public.kpi_trades_scrubbed` with window sums of `pnl_trade_usd`. It reloads the PostgREST schema cache.
+3. Actions → Export KPI → Run workflow.
+4. Hard-refresh https://jrg185.github.io/the-book/
+
+After that, the last crypto fill has non-null `running_pnl_frac` and `running_balance_frac`. On the page, Running P&L and Running balance (book) are dollars (seed × fraction), and Why shows the full note (wraps, and the cell `title` is the same text).
+
+Check:
+
+```sql
+select sleeve, timestamp_et, ticker, side,
+       running_pnl_frac, running_balance_frac, length(why) as why_len
+from public.kpi_trades_scrubbed
+where lower(sleeve) = 'crypto'
+order by timestamp_et desc, ticker desc, side desc
+limit 1;
+```
+
+The migration does not write `kpi_trades` and does not place orders. RH fill sync stays on its own branch.
+
+## Notes backfill
+
+One shot, not a live feed. Sheet: [Agentic Trading Ledger](https://docs.google.com/spreadsheets/d/14o00TKyylOQYFHecAQ5RMlhYCDEOkxaJXrj1lGrtceo) tabs **Crypto** and **Equities**.
+
+Export each tab to CSV. Then, with the service role or `SUPABASE_DB_URL`:
+
+```bash
+python3 scripts/backfill_notes_from_sheet.py \
+  --csv crypto.csv --sleeve crypto \
+  --csv equities.csv --sleeve equities \
+  --dry-run
+
+SUPABASE_URL=https://bsnqwgbshwszbjncglqx.supabase.co \
+SUPABASE_SERVICE_ROLE_KEY=... \
+python3 scripts/backfill_notes_from_sheet.py \
+  --csv crypto.csv --sleeve crypto \
+  --csv equities.csv --sleeve equities \
+  --apply
+```
+
+The script matches `order_id` to the UUID inside `why`, else sleeve + ticker + side + qty + timestamp (sheet clocks are America/New_York). It updates `why` and `notes` only where the sheet has a human note. It does not insert rows and does not change qty. Re-run Export KPI afterward so Pages picks up the notes. The cloud agent that added this script could read the sheet and could not write `kpi_trades` (no service role in that environment).
