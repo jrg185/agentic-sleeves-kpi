@@ -1,9 +1,9 @@
 {
   "source": "supabase",
-  "fetched_at": "2026-09-28T10:15:39Z",
+  "fetched_at": "2026-09-28T10:21:36Z",
   "export_status": "ok",
   "export_error": null,
-  "export_attempted_at": "2026-09-28T10:15:39Z",
+  "export_attempted_at": "2026-09-28T10:21:36Z",
   "project_ref": "bsnqwgbshwszbjncglqx",
   "views": [
     "public.kpi_summary",
