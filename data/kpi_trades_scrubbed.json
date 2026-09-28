@@ -277,5 +277,131 @@
     "notional_frac_of_book": 0.3,
     "pnl_frac_of_book": 0.0,
     "why": "SWING unlock Joe/Wags; soft tgt flexible"
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T23:50:48.865876+00:00",
+    "ticker": "GRT",
+    "side": "buy",
+    "notional_frac_of_book": 0.043033,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic backfill order 6ab9abd8-4d32-463d-b90b-fe39c06179f4"
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T00:57:48.140309+00:00",
+    "ticker": "BONK",
+    "side": "buy",
+    "notional_frac_of_book": 0.078233,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic backfill order 6ab9bb8c-8f65-48fd-8d9f-ca6fd20fee0c"
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T00:57:49.076014+00:00",
+    "ticker": "HBAR",
+    "side": "buy",
+    "notional_frac_of_book": 0.063233,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic backfill order 6ab9bb8d-42b8-4692-878b-be28b01a4289"
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T00:57:51.781634+00:00",
+    "ticker": "LDO",
+    "side": "buy",
+    "notional_frac_of_book": 0.0586,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic backfill order 6ab9bb8f-a80a-4bde-894e-efe928a36adf"
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T00:57:52.378832+00:00",
+    "ticker": "OP",
+    "side": "buy",
+    "notional_frac_of_book": 0.058033,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic backfill order 6ab9bb90-0bdc-4ee4-86c9-64c8927a8e75"
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T00:57:54.502613+00:00",
+    "ticker": "GRT",
+    "side": "buy",
+    "notional_frac_of_book": 0.012,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic backfill order 6ab9bb92-bf23-4804-aba7-bf4893f01f12"
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T00:57:54.65943+00:00",
+    "ticker": "IMX",
+    "side": "buy",
+    "notional_frac_of_book": 0.010167,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic backfill order 6ab9bb92-61fe-4271-8cb4-1c82b3de64e2"
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T00:57:57.067678+00:00",
+    "ticker": "SEI",
+    "side": "buy",
+    "notional_frac_of_book": 0.008667,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic backfill order 6ab9bb95-5277-4c2d-bf51-616b48fc4f0c"
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T00:57:57.776014+00:00",
+    "ticker": "SUI",
+    "side": "buy",
+    "notional_frac_of_book": 0.0105,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic backfill order 6ab9bb95-47c9-496b-9a49-dc6ce316a7c4"
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T01:03:29.645038+00:00",
+    "ticker": "QNT",
+    "side": "sell",
+    "notional_frac_of_book": 0.0886,
+    "pnl_frac_of_book": 0.046283,
+    "why": "RH Agentic backfill order 6ab9bce1-d180-4ca2-b174-44d7f90ccd58"
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T01:26:09.875717+00:00",
+    "ticker": "W",
+    "side": "sell",
+    "notional_frac_of_book": 0.053167,
+    "pnl_frac_of_book": 0.005873,
+    "why": "RH Agentic backfill order 6ab9c231-712f-4b61-87d4-e2acb7a75df9"
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T01:26:10.570577+00:00",
+    "ticker": "SEI",
+    "side": "sell",
+    "notional_frac_of_book": 0.0544,
+    "pnl_frac_of_book": 0.00395,
+    "why": "RH Agentic backfill order 6ab9c232-59c1-419f-a7ee-85d734f961df"
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T01:26:10.932311+00:00",
+    "ticker": "IMX",
+    "side": "sell",
+    "notional_frac_of_book": 0.051733,
+    "pnl_frac_of_book": 0.00175,
+    "why": "RH Agentic backfill order 6ab9c232-d662-4611-8009-f7ba48612b71"
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T02:06:57.227938+00:00",
+    "ticker": "GRT",
+    "side": "sell",
+    "notional_frac_of_book": 0.1039,
+    "pnl_frac_of_book": 0.003049,
+    "why": "RH Agentic backfill order 6ab9cbc1-b5ab-4951-a49a-597bb68619a3"
   }
 ]

@@ -1,9 +1,9 @@
 {
   "source": "supabase",
-  "fetched_at": "2026-09-28T02:10:59Z",
+  "fetched_at": "2026-09-28T02:18:15Z",
   "export_status": "ok",
   "export_error": null,
-  "export_attempted_at": "2026-09-28T02:10:59Z",
+  "export_attempted_at": "2026-09-28T02:18:15Z",
   "project_ref": "bsnqwgbshwszbjncglqx",
   "views": [
     "public.kpi_summary",
@@ -11,7 +11,7 @@
   ],
   "row_counts": {
     "kpi_summary": 3,
-    "kpi_trades_scrubbed": 31
+    "kpi_trades_scrubbed": 45
   },
   "note": "Exported from scrubbed views. Balances are sleeve book (cash + MTM; interim start + running P&L), not cash. kpi_summary remaps running_bal_vs_start, pnl_pct_of_book, and notes onto running_balance_frac, running_pnl_frac, and note. Page dollars are seed \u00d7 fraction. Sleeve as_of comes from kpi_sleeve_snapshots, inserted by scripts/refresh_kpi_snapshots.py before this export.",
   "warehouse_status": "ok",
