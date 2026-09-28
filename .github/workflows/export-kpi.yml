@@ -1,12 +1,19 @@
 name: Export KPI
 
 # Refreshes public.kpi_sleeve_snapshots, then reads the scrubbed views.
-# A failed refresh does not commit data JSON.
+# A failed refresh does not commit KPI JSON. It stamps data/meta.json and the
+# failure step publishes that file only, so a read-only or full disk stays visible.
 # Marks: public Coinbase ticker (crypto) and Yahoo chart (equities).
 # FINNHUB_API_KEY, COINSTATS_API_KEY, and ALPHA_VANTAGE_API_KEY are optional.
 # data/** pushes are ignored so the export commit does not run this job again.
 
 on:
+  schedule:
+    # US cash session in both EDT and EST (about 9:30am–5:00pm ET), every 15 minutes.
+    - cron: "*/15 13-21 * * 1-5"
+    # Hourly outside that window, including weekends, so the crypto sleeve does not sit overnight.
+    - cron: "7 0-12,22-23 * * 1-5"
+    - cron: "7 * * * 0,6"
   push:
     branches: [main]
     paths-ignore:
@@ -57,6 +64,7 @@ jobs:
         run: python3 scripts/export_kpi.py
 
       - name: Commit refreshed JSON
+        if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -65,5 +73,18 @@ jobs:
             echo "KPI JSON unchanged."
           else
             git commit -m "Export scrubbed KPI views to data JSON"
+            git push
+          fi
+
+      - name: Publish export failure on the board
+        if: failure()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- data/meta.json
+          if git diff --cached --quiet; then
+            echo "No export status to publish. The board keeps the previous snapshot."
+          else
+            git commit -m "Mark KPI export stale"
             git push
           fi

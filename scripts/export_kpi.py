@@ -9,11 +9,12 @@ The browser never sees this script's credentials. Set:
 SUPABASE_URL defaults to the agentic-signals project when unset.
 ALPHA_VANTAGE_API_KEY and FINNHUB_API_KEY are not read here. Marks are
 applied by scripts/refresh_kpi_snapshots.py before this export.
-With no service role key, the script leaves the committed sample JSON
-in place and exits 0, unless KPI_REFRESH_EXPECTED=1. In that case a missing
-credential or the latest kpi_summary.as_of per sleeve older than 15 minutes
-exits non-zero and does not rewrite data/*.json. Older snapshots for the
-same sleeve are ignored. It does not rewrite data/models.json.
+With no service role key, the script leaves the committed KPI JSON
+in place, stamps data/meta.json with export_status "stale", and exits 0,
+unless KPI_REFRESH_EXPECTED=1. In that case a missing credential or the
+latest kpi_summary.as_of per sleeve older than 15 minutes exits non-zero,
+stamps meta.json, and does not rewrite KPI numbers. Older snapshots for
+the same sleeve are ignored. It does not rewrite data/models.json.
 
   python3 scripts/export_kpi.py --self-test
 
@@ -499,9 +500,13 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
     # A missing or empty models_oos view must not wipe a committed seed.
     # The page keeps data/models_oos.json until the view returns rows.
     present = [name for name in (*VIEWS, *OPTIONAL_VIEWS) if name not in missing]
+    fetched_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     rows["meta"] = {
         "source": "supabase",
-        "fetched_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "fetched_at": fetched_at,
+        "export_status": "ok",
+        "export_error": None,
+        "export_attempted_at": fetched_at,
         "project_ref": PROJECT_REF,
         "views": [f"public.{name}" for name in present],
         "row_counts": {
@@ -511,8 +516,11 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
             "Exported from scrubbed views. Balances are sleeve book (cash + MTM; interim start + running P&L), not cash. "
             "kpi_summary remaps running_bal_vs_start, pnl_pct_of_book, and notes "
             "onto running_balance_frac, running_pnl_frac, and note. "
-            "Page dollars are seed × fraction."
+            "Page dollars are seed × fraction. "
+            "Sleeve as_of comes from kpi_sleeve_snapshots, inserted by "
+            "scripts/refresh_kpi_snapshots.py before this export."
         ),
+        "warehouse_status": "ok",
     }
     if missing:
         rows["meta"]["optional_missing"] = missing
@@ -526,6 +534,12 @@ def oos_has_rows(payload) -> bool:
         rows = payload.get("rows")
         return isinstance(rows, list) and any(isinstance(row, dict) for row in rows)
     return False
+
+
+MISSING_CREDS = (
+    "Export did not refresh: SUPABASE_SERVICE_ROLE_KEY and SUPABASE_DB_URL are unset. "
+    "Showing the last committed snapshot."
+)
 
 
 def parse_as_of(value) -> dt.datetime:
@@ -598,6 +612,101 @@ def assert_summary_fresh(rows: list, *, now: dt.datetime | None = None) -> None:
                 f"kpi_summary as_of {moment.strftime('%Y-%m-%dT%H:%M:%SZ')} is stale after refresh; "
                 "not writing JSON"
             )
+
+
+def committed_as_of(target: Path) -> str | None:
+    path = target / "kpi_summary.json"
+    if not path.exists():
+        return None
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(rows, list):
+        return None
+    best = None
+    best_at = None
+    for row in rows:
+        if not isinstance(row, dict) or not row.get("as_of"):
+            continue
+        try:
+            moment = parse_as_of(row["as_of"])
+        except (TypeError, ValueError):
+            continue
+        if best_at is None or moment >= best_at:
+            best_at = moment
+            best = str(row["as_of"])
+    return best
+
+
+def failure_message(exc: BaseException) -> tuple[str, str]:
+    """Public status for the board. The message must not contain secrets or KPI numbers."""
+    text = str(exc).lower()
+    errno = getattr(exc, "errno", None)
+    if errno == 28 or "no space left" in text or "disk full" in text or "enospc" in text:
+        return "error", "Export failed: disk full. KPI numbers were left unchanged."
+    if errno == 30 or "read-only" in text or "readonly" in text or "read only" in text or "erofs" in text:
+        return "error", "Export failed: read-only database or filesystem. KPI numbers were left unchanged."
+    if "no supabase credential" in text:
+        return "stale", MISSING_CREDS
+    if isinstance(exc, RuntimeError) and str(exc).startswith("REST "):
+        detail = str(exc)
+        if "://" in detail or looks_like_secret(detail):
+            detail = "REST read failed"
+        else:
+            parts = []
+            for token in detail.split():
+                if looks_like_secret(token) or token.startswith("eyJ"):
+                    parts.append("[redacted]")
+                else:
+                    parts.append(token)
+            detail = " ".join(parts)
+        return "error", f"Export failed: {detail[:180]}. KPI numbers were left unchanged."
+    return "error", "Export failed before it could refresh the snapshot. KPI numbers were left unchanged."
+
+
+def classify_failure(exc: BaseException, frozen: str | None) -> tuple[str, str, str | None]:
+    """Status, board copy, and warehouse_status. Does not invent mark-to-market."""
+    status, message = failure_message(exc)
+    raw = str(exc)
+    low = f"{raw} {message}".lower()
+    when = frozen or "the last committed snapshot"
+    if "25006" in raw or "read-only" in low or "readonly" in low or "read only" in low:
+        return "error", f"warehouse read-only — snapshot frozen at {when}", "read-only"
+    if "53100" in raw or "disk full" in low or "no space" in low:
+        return "error", f"warehouse disk full — snapshot frozen at {when}", "disk-full"
+    if "stale after refresh" in low:
+        return "error", raw[:300], "stale-snapshot"
+    return status, message, None
+
+
+def stamp_export_failure(
+    target: Path,
+    status: str,
+    message: str,
+    warehouse_status: str | None = None,
+    snapshot_as_of: str | None = None,
+) -> None:
+    """Record a missed refresh on meta.json. Does not rewrite KPI JSON."""
+    meta_path = target / "meta.json"
+    meta: dict = {}
+    if meta_path.exists():
+        try:
+            loaded = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            loaded = None
+        if isinstance(loaded, dict):
+            meta = loaded
+    meta["export_status"] = status
+    meta["export_error"] = message
+    meta["export_attempted_at"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if warehouse_status:
+        meta["warehouse_status"] = warehouse_status
+    else:
+        meta.pop("warehouse_status", None)
+    if snapshot_as_of:
+        meta["snapshot_as_of"] = snapshot_as_of
+    write_json(meta_path, meta)
 
 
 def write_bundle(target: Path, bundle: dict) -> None:
@@ -703,21 +812,43 @@ def main(argv: list[str] | None = None) -> int:
                 "refusing to leave KPI JSON unchanged.",
                 file=sys.stderr,
             )
+            try:
+                stamp_export_failure(DATA, "error", MISSING_CREDS)
+            except OSError as exc:
+                print(f"Could not record export status in data/meta.json: {exc}", file=sys.stderr)
             return 1
-        print(
-            "SUPABASE_SERVICE_ROLE_KEY and SUPABASE_DB_URL are unset; "
-            "leaving committed data/*.json in place."
-        )
+        print(MISSING_CREDS)
         needed = [DATA / f"{name}.json" for name in (*VIEWS, *OPTIONAL_VIEWS, "models", "meta")]
         if any(not path.exists() for path in needed):
             print("Sample JSON missing; installing fixtures.", file=sys.stderr)
             install_sample(DATA)
+        try:
+            stamp_export_failure(DATA, "stale", MISSING_CREDS)
+        except OSError as exc:
+            print(f"Could not record export status in data/meta.json: {exc}", file=sys.stderr)
+            return 1
         return 0
 
-    bundle = export_live(base_url, key, db_url)
-    if refresh_expected:
-        assert_summary_fresh(bundle["kpi_summary"])
-    write_bundle(DATA, bundle)
+    try:
+        bundle = export_live(base_url, key, db_url)
+        if refresh_expected:
+            assert_summary_fresh(bundle["kpi_summary"])
+        write_bundle(DATA, bundle)
+    except Exception as exc:
+        frozen = committed_as_of(DATA)
+        status, message, warehouse_status = classify_failure(exc, frozen)
+        print(message, file=sys.stderr)
+        try:
+            stamp_export_failure(
+                DATA,
+                status,
+                message,
+                warehouse_status=warehouse_status,
+                snapshot_as_of=frozen,
+            )
+        except OSError as stamp_exc:
+            print(f"Could not record export status in data/meta.json: {stamp_exc}", file=sys.stderr)
+        return 1
     if not (DATA / "models.json").exists():
         write_json(DATA / "models.json", sample_bundle()["models"])
     print(

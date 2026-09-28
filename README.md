@@ -55,12 +55,31 @@ Pages serves that committed JSON. The browser only fetches `data/*.json`.
 Workflow: [`.github/workflows/export-kpi.yml`](.github/workflows/export-kpi.yml) (same bytes as [`scripts/export-kpi.yml`](scripts/export-kpi.yml)).
 
 - `workflow_dispatch`, pull requests (position math only), and pushes to `main` other than `data/**`
-- Refresh, then export. A failed refresh does not commit JSON
+- schedule: every 15 minutes on weekdays from 13:00–21:45 UTC (covers 9:30am–4:00pm ET in both EDT and EST), and hourly outside that window including weekends
+- Refresh `kpi_sleeve_snapshots`, then export. A failed refresh does not commit KPI JSON
 - Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. `SUPABASE_DB_URL` is optional
 - Crypto marks: public Coinbase ticker, then Yahoo `{SYMBOL}-USD`. Equities marks: Finnhub when `FINNHUB_API_KEY` is set, then Yahoo chart. CoinStats and Alpha Vantage are later fallbacks when those keys are set
 - Writes `data/kpi_summary.json`, `data/kpi_trades_scrubbed.json`, `data/models_oos.json`, and `data/meta.json` when they changed
 - Does not rewrite `data/models.json`
 - Does not deploy Pages and does not change the Pages source
+
+The board reads `meta.fetched_at` as **Last refreshed** in America/New_York, and each sleeve `as_of` the same way. A healthy export sets `meta.export_status` to `ok`. If the service role key is missing, the script leaves the KPI files alone, sets `export_status` to `stale`, and exits 0. If the refresh throws (read-only filesystem, disk full, or a failed REST read), it stamps `export_status` `error` on `meta.json` only and exits 1. The workflow then commits that meta file and stays red. The page shows an **Export failed** or **Stale snapshot** chip plus the error copy, and it does not invent new KPI numbers. If a crash cannot write `meta.json`, the chip turns stale once `fetched_at` is older than 3 hours.
+
+### Warehouse MTM
+
+`public.kpi_summary` is a view over the latest `public.kpi_sleeve_snapshots` row. Re-exporting JSON cannot move `as_of` by itself.
+
+The writer is in this repo: `scripts/refresh_kpi_snapshots.py`. Export KPI runs it first. It reads `public.kpi_trades` (qty and price), marks open names from public Coinbase and Yahoo quotes, and INSERTs a new snapshot with `as_of` set to now. It does not place orders and it does not change the table schema. Sibling `upsert-warehouse` Actions in `agentic-crypto-signals` and `agentic-equity-signals` write `bars`, `features`, `labels`, and `model_runs`. They are not the sleeve MTM writer.
+
+Order:
+
+1. Refresh inserts `kpi_sleeve_snapshots`.
+2. Export reads `kpi_summary` and `kpi_trades_scrubbed` and commits JSON only if `as_of` is within 15 minutes.
+3. Pages shows that `as_of`.
+
+If the INSERT fails because the database is read-only (25006) or the disk is full, the script leaves the KPI numbers alone and stamps `meta.warehouse_status`. The chip reads **Warehouse read-only** or **Warehouse disk full**, with copy `snapshot frozen at` the last committed sleeve time. The Action publishes that meta file and stays red.
+
+When `meta.source` is `supabase` and the latest sleeve `as_of` is older than 60 minutes, and the warehouse did not report read-only or disk full, the chip is **MTM stale**. Cache-busting the JSON does not make that snapshot current.
 
 There is no Sheets API key and no Google CSV export in this path. A sheet may feed Supabase somewhere else; this site does not.
 
@@ -123,7 +142,7 @@ Public Coinbase and Yahoo marks do not need those quote keys.
 
 After the Supabase secrets are saved, run **Actions → Export KPI → Run workflow**. A successful export sets `meta.source` to `supabase` and replaces the KPI JSON. `fixtures/` and `data/models.json` stay as they are.
 
-If the service role secret is unset, a local `scripts/export_kpi.py` exits 0 and leaves the committed JSON alone. `KPI_REFRESH_EXPECTED=1` (set on the export step after refresh) exits non-zero instead.
+If the service role secret is unset, a local `scripts/export_kpi.py` exits 0, leaves the KPI JSON alone, and marks `meta.export_status` as `stale`. `KPI_REFRESH_EXPECTED=1` (set on the export step after refresh) exits non-zero instead.
 
 ## GitHub Pages
 
@@ -136,6 +155,8 @@ The site is https://jrg185.github.io/the-book/
 ```bash
 python3 scripts/refresh_kpi_snapshots.py --self-test
 python3 scripts/export_kpi.py --install-sample
+python3 -m py_compile scripts/export_kpi.py
+python3 -m unittest scripts/test_export_status.py
 python3 -m http.server 8765
 ```
 

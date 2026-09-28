@@ -38,19 +38,151 @@ function pair(primary, secondary) {
   return wrap;
 }
 
-async function loadJson(path) {
-  const response = await fetch(path, { cache: "no-cache" });
+const STALE_AFTER_MS = 3 * 60 * 60 * 1000;
+// Sleeve as_of is the warehouse MTM clock. Export can rewrite JSON without moving it.
+const SNAPSHOT_STALE_MS = 60 * 60 * 1000;
+
+function parseTime(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatEt(value) {
+  const date = parseTime(value);
+  if (!date) return value ? String(value) : "";
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date);
+}
+
+function latestStamp(values) {
+  let best = null;
+  let bestMs = -Infinity;
+  for (const value of values) {
+    const date = parseTime(value);
+    if (date && date.getTime() >= bestMs) {
+      best = value;
+      bestMs = date.getTime();
+    }
+  }
+  return best;
+}
+
+async function loadJson(path, token) {
+  const bust = encodeURIComponent(String(token || Date.now()));
+  const response = await fetch(`${path}?t=${bust}`, { cache: "no-store" });
   if (!response.ok) throw new Error(`${path} ${response.status}`);
   return response.json();
 }
 
-function renderStatus(meta) {
+function agePhrase(ms) {
+  const minutes = Math.max(0, Math.round(ms / 60000));
+  if (minutes < 60) return `${minutes} minutes`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (!rest) return hours === 1 ? "1 hour" : `${hours} hours`;
+  return `${hours}h ${rest}m`;
+}
+
+function renderStatus(meta, sleeveAsOf) {
   statusEl.replaceChildren();
-  const source = meta?.source === "supabase" ? "Supabase export" : "Sample snapshot";
-  const chip = el("span", meta?.source === "supabase" ? "chip live" : "chip sample", source);
+  const exportStatus = String(meta?.export_status || "").toLowerCase();
+  const refreshedAt = parseTime(meta?.fetched_at);
+  const snapshotAt = parseTime(sleeveAsOf);
+  const agedOut = refreshedAt != null && Date.now() - refreshedAt.getTime() > STALE_AFTER_MS;
+  const snapshotAge = snapshotAt == null ? null : Date.now() - snapshotAt.getTime();
+  const warehouse = String(meta?.warehouse_status || "").toLowerCase();
+  const mtmStale = meta?.source === "supabase" && snapshotAge != null && snapshotAge > SNAPSHOT_STALE_MS;
+  const exportBroken = exportStatus === "error" || exportStatus === "stale" || agedOut;
+  const frozenLabel = formatEt(meta?.snapshot_as_of || sleeveAsOf);
+  let chipClass = "chip sample";
+  let chipText = "Sample snapshot";
+  if (warehouse === "read-only") {
+    chipClass = "chip error";
+    chipText = "Warehouse read-only";
+  } else if (warehouse === "disk-full") {
+    chipClass = "chip error";
+    chipText = "Warehouse disk full";
+  } else if (exportStatus === "error") {
+    chipClass = "chip error";
+    chipText = "Export failed";
+  } else if (exportStatus === "stale" || agedOut) {
+    chipClass = "chip stale";
+    chipText = "Stale snapshot";
+  } else if (mtmStale) {
+    chipClass = "chip stale";
+    chipText = "MTM stale";
+  } else if (meta?.source === "supabase") {
+    chipClass = "chip live";
+    chipText = "Supabase export";
+  }
+  const chip = el("span", chipClass, chipText);
   statusEl.append(chip);
-  const when = meta?.fetched_at || meta?.note || "";
-  if (when) statusEl.append(el("p", "status-copy", String(when)));
+
+  const lines = el("div", "status-lines");
+  const refreshed = formatEt(meta?.fetched_at);
+  const headline = el(
+    "p",
+    "status-copy",
+    refreshed ? `Last refreshed ${refreshed}` : "Last refreshed time is missing from this snapshot."
+  );
+  lines.append(headline);
+  const asOf = formatEt(sleeveAsOf);
+  if (asOf) lines.append(el("p", "status-copy", `Sleeve as of ${asOf}`));
+  if (warehouse === "read-only") {
+    lines.append(
+      el(
+        "p",
+        "status-copy status-error",
+        frozenLabel
+          ? `warehouse read-only — snapshot frozen at ${frozenLabel}`
+          : "warehouse read-only — snapshot frozen"
+      )
+    );
+  } else if (warehouse === "disk-full") {
+    lines.append(
+      el(
+        "p",
+        "status-copy status-error",
+        frozenLabel
+          ? `warehouse disk full — snapshot frozen at ${frozenLabel}`
+          : "warehouse disk full — snapshot frozen"
+      )
+    );
+  } else if (meta?.export_error) {
+    lines.append(el("p", "status-copy status-error", String(meta.export_error)));
+  } else if (exportBroken) {
+    lines.append(el("p", "status-copy status-error", "This JSON is not a fresh warehouse export."));
+  } else if (mtmStale) {
+    lines.append(
+      el(
+        "p",
+        "status-copy status-warn",
+        `Warehouse MTM is ${agePhrase(snapshotAge)} old. Export only re-reads kpi_summary. This repo does not refresh kpi_sleeve_snapshots.`
+      )
+    );
+  } else if (meta?.source === "supabase" && !asOf) {
+    lines.append(
+      el(
+        "p",
+        "status-copy status-warn",
+        "Sleeve as_of is missing, so this page cannot tell whether warehouse MTM moved."
+      )
+    );
+  } else if (!refreshed && meta?.note) {
+    lines.append(el("p", "status-copy", String(meta.note)));
+  }
+  const attempted = formatEt(meta?.export_attempted_at);
+  if (attempted && attempted !== refreshed && (exportStatus === "error" || exportStatus === "stale")) {
+    lines.append(el("p", "status-copy", `Last export attempt ${attempted}`));
+  }
+  statusEl.append(lines);
 }
 
 function splitPnl(label, dollars, frac, fine) {
@@ -67,7 +199,11 @@ function renderSleeve(derived, { hero = false } = {}) {
   const card = el("article", `sleeve ${derived.sleeve}${hero ? " hero" : ""}`);
   const head = el("header", "sleeve-head");
   head.append(el("h2", null, derived.label));
-  if (derived.asOf) head.append(el("time", null, String(derived.asOf)));
+  if (derived.asOf) {
+    const when = el("time", null, formatEt(derived.asOf));
+    when.dateTime = String(derived.asOf);
+    head.append(when);
+  }
   card.append(head);
 
   const grid = el("div", "metrics");
@@ -177,8 +313,8 @@ function renderTape(sleeve, trades) {
 }
 
 function render(summaryRows, tradeRows, meta) {
-  renderStatus(meta || {});
   const sleeves = sortSleeves(Array.isArray(summaryRows) ? summaryRows : [], undefined);
+  renderStatus(meta || {}, latestStamp(sleeves.map((row) => row.asOf)));
   boardEl.replaceChildren();
   const combined = sleeves.find((row) => row.sleeve === "combined");
   const rest = sleeves.filter((row) => row.sleeve !== "combined");
@@ -265,14 +401,16 @@ function summarizeOosRow(row) {
   return bits.join(" \u00b7 ") || "Pending T04.";
 }
 
-function renderModels(payload, oosPayload) {
+function renderModels(payload, oosPayload, meta) {
   modelsEl.replaceChildren();
   const models = payload && Array.isArray(payload.models) ? payload.models.slice() : [];
   const exported = oosRows(oosPayload);
+  const freshBits = [];
+  if (meta?.fetched_at) freshBits.push(`Last refreshed ${formatEt(meta.fetched_at)}`);
+  if (payload?.as_of) freshBits.push(`Models as of ${formatEt(payload.as_of)}`);
+  if (oosPayload?.updated_at) freshBits.push(`OOS updated ${formatEt(oosPayload.updated_at)}`);
+  if (freshBits.length) modelsEl.append(el("p", "freshness", freshBits.join(" · ")));
   if (payload && payload.note) modelsEl.append(el("p", "note", String(payload.note)));
-  if (oosPayload && oosPayload.updated_at) {
-    modelsEl.append(el("p", "fine", `OOS updated ${oosPayload.updated_at}`));
-  }
   if (!models.length && exported.length) {
     for (const row of exported) {
       models.push({
@@ -332,18 +470,29 @@ function renderModels(payload, oosPayload) {
 async function main() {
   tabSleeves.addEventListener("click", () => showTab("sleeves"));
   tabModels.addEventListener("click", () => showTab("models"));
+  let meta = {};
   try {
-    const [summary, trades, meta, models, oos] = await Promise.all([
-      loadJson("data/kpi_summary.json"),
-      loadJson("data/kpi_trades_scrubbed.json"),
-      loadJson("data/meta.json"),
-      loadJson("data/models.json").catch(() => ({ models: [], note: "data/models.json is not in this snapshot." })),
-      loadJson("data/models_oos.json").catch(() => ({ rows: [] })),
+    meta = await loadJson("data/meta.json", Date.now());
+  } catch {
+    meta = {
+      export_status: "error",
+      export_error: "data/meta.json did not load. The board cannot confirm this snapshot is fresh.",
+    };
+  }
+  const token = meta.fetched_at || meta.export_attempted_at || Date.now();
+  try {
+    const [summary, trades, models, oos] = await Promise.all([
+      loadJson("data/kpi_summary.json", token),
+      loadJson("data/kpi_trades_scrubbed.json", token),
+      loadJson("data/models.json", token).catch(() => ({ models: [], note: "data/models.json is not in this snapshot." })),
+      loadJson("data/models_oos.json", token).catch(() => ({ rows: [] })),
     ]);
     render(summary, trades, meta);
-    renderModels(models, oos);
+    renderModels(models, oos, meta);
   } catch (error) {
-    statusEl.replaceChildren(el("p", "status-copy", "KPI JSON did not load."));
+    renderStatus(meta);
+    const lines = statusEl.querySelector(".status-lines") || statusEl;
+    lines.append(el("p", "status-copy status-error", "KPI JSON did not load."));
     boardEl.replaceChildren(el("p", "empty", String(error.message || error)));
   }
 }

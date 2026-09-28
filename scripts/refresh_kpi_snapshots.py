@@ -65,6 +65,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from decimal import Decimal
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 DEFAULT_URL = "https://bsnqwgbshwszbjncglqx.supabase.co"
@@ -981,6 +982,23 @@ def self_test() -> int:
     return 0
 
 
+def stamp_warehouse_failure(message: str) -> None:
+    """Write the board chip onto data/meta.json. Does not rewrite KPI numbers."""
+    root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(root / "scripts"))
+    import export_kpi
+
+    frozen = export_kpi.committed_as_of(root / "data")
+    _status, public, warehouse_status = export_kpi.classify_failure(RefreshError(message), frozen)
+    export_kpi.stamp_export_failure(
+        root / "data",
+        "error",
+        public,
+        warehouse_status=warehouse_status,
+        snapshot_as_of=frozen,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
@@ -1000,6 +1018,10 @@ def main(argv: list[str] | None = None) -> int:
         return refresh(dry_run=args.dry_run)
     except RefreshError as exc:
         print(str(exc), file=sys.stderr)
+        try:
+            stamp_warehouse_failure(str(exc))
+        except OSError as stamp_exc:
+            print(f"Could not record warehouse status in data/meta.json: {stamp_exc}", file=sys.stderr)
         return 1
 
 
