@@ -225,10 +225,8 @@ The site is https://jrg185.github.io/the-book/
 python3 scripts/refresh_kpi_snapshots.py --self-test
 python3 scripts/sync_rh_kpi_trades.py --self-test
 python3 scripts/sync_rh_kpi_trades.py --dry-run
-python3 scripts/export_kpi.py --self-test
-python3 scripts/backfill_notes_from_sheet.py --self-test
 python3 scripts/export_kpi.py --install-sample
-python3 -m py_compile scripts/export_kpi.py scripts/backfill_notes_from_sheet.py
+python3 -m py_compile scripts/export_kpi.py
 python3 -m unittest scripts/test_export_status.py
 python3 -m http.server 8765
 ```
@@ -254,6 +252,15 @@ limit 6;
 Open http://127.0.0.1:8765/
 
 ## Tape running ledger
+
+Local checks for this change:
+
+```bash
+python3 scripts/export_kpi.py --self-test
+python3 scripts/backfill_notes_from_sheet.py --self-test
+python3 -m py_compile scripts/export_kpi.py scripts/backfill_notes_from_sheet.py
+python3 -m unittest scripts/test_export_status.py
+```
 
 `scripts/export_kpi.py` fills Running P&L and Running balance on every export, including before the SQL view is updated. The view should match that math so a direct `select` from `kpi_trades_scrubbed` is the same ledger.
 
