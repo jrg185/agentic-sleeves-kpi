@@ -18,10 +18,10 @@
       <h1>KPI board</h1>
     </div>
     <p class="lede">Crypto, Equities, and the combined book. Read-only. Dollars on this page are the book seed times the fraction in the scrubbed snapshot.</p>
-    <nav class="repo-links" aria-label="Source repositories">
+    <nav class="repo-links" aria-label="Board links">
       <a href="https://github.com/jrg185/the-book" target="_blank" rel="noopener">The Book repo</a>
-      <a href="https://github.com/jrg185/agentic-crypto-signals" target="_blank" rel="noopener">Crypto signals</a>
-      <a href="https://github.com/jrg185/agentic-equity-signals" target="_blank" rel="noopener">Equity signals</a>
+      <a href="#model-crypto" data-tab="models">Crypto signals</a>
+      <a href="#model-equities" data-tab="models">Equity signals</a>
     </nav>
   </header>
   <nav class="tabs" aria-label="Board sections">
@@ -33,6 +33,26 @@
   </section>
   <div id="panel-sleeves">
     <main id="board"></main>
+    <section class="book-block" id="positions-section" aria-labelledby="positions-heading">
+      <div class="block-head">
+        <h2 id="positions-heading">Open positions</h2>
+        <p>Net open quantity by ticker. Unrealized is the book seed times the fraction. Avg and mark are prices. Account numbers stay off this page.</p>
+      </div>
+      <div id="positions"></div>
+    </section>
+    <section class="book-block" id="curves-section" aria-labelledby="curves-heading">
+      <div class="block-head">
+        <h2 id="curves-heading">Equity curves</h2>
+        <p>Book over time from sleeve snapshots. The line is book divided by the book seed. Readout dollars are that fraction times the seed.</p>
+      </div>
+      <div class="curve-controls" role="group" aria-label="Curve series">
+        <button type="button" data-curve="all" aria-pressed="true">All</button>
+        <button type="button" data-curve="combined" aria-pressed="false">Combined</button>
+        <button type="button" data-curve="crypto" aria-pressed="false">Crypto</button>
+        <button type="button" data-curve="equities" aria-pressed="false">Equities</button>
+      </div>
+      <div id="curves"></div>
+    </section>
     <section class="tapes-head">
       <h2>Scrubbed fills</h2>
       <p>Trade tape from <code>kpi_trades_scrubbed</code>. Account fields stay off this page.</p>
@@ -48,10 +68,10 @@
   </div>
   <footer>
     <p>Static page. It reads <code>data/*.json</code> only and does not place orders.</p>
-    <nav class="repo-links" aria-label="Source repositories">
+    <nav class="repo-links" aria-label="Board links">
       <a href="https://github.com/jrg185/the-book" target="_blank" rel="noopener">The Book repo</a>
-      <a href="https://github.com/jrg185/agentic-crypto-signals" target="_blank" rel="noopener">Crypto signals</a>
-      <a href="https://github.com/jrg185/agentic-equity-signals" target="_blank" rel="noopener">Equity signals</a>
+      <a href="#model-crypto" data-tab="models">Crypto signals</a>
+      <a href="#model-equities" data-tab="models">Equity signals</a>
     </nav>
   </footer>
   <noscript>This board needs JavaScript to read the committed JSON snapshot.</noscript>

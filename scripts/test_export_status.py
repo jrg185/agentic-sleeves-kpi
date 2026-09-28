@@ -131,10 +131,10 @@ class TapeLedgerTests(unittest.TestCase):
         self.assertIsNotNone(last["running_pnl_frac"])
         self.assertIsNotNone(last["running_balance_frac"])
         self.assertAlmostEqual(last["running_balance_frac"], 1 + last["running_pnl_frac"], places=6)
-        # Current committed tape: 44 crypto fills, last GRT sell on 2026-09-28.
-        self.assertEqual(last["ticker"], "GRT")
-        self.assertEqual(last["side"], "sell")
-        self.assertAlmostEqual(last["running_pnl_frac"], float(export_kpi.q6(Decimal("0.081699"))), places=6)
+        # Current committed tape: last crypto fill is the ALGO buy on 2026-09-28.
+        self.assertEqual(last["ticker"], "ALGO")
+        self.assertEqual(last["side"], "buy")
+        self.assertAlmostEqual(last["running_pnl_frac"], float(export_kpi.q6(Decimal("0.090398"))), places=6)
         committed = [
             row for row in raw if row.get("sleeve") == "crypto"
         ]
