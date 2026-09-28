@@ -38,7 +38,50 @@
       "n_cohorts": 23,
       "promoted": false,
       "note": "pre-FRED; best IR still negative \u2014 not promoted"
+    },
+    {
+      "sleeve": "crypto",
+      "asset_class": "crypto",
+      "model": "rules",
+      "auc": 0.4998,
+      "brier": 0.4293,
+      "n_long": 49325,
+      "after_cost_mean": -0.0016,
+      "sleeve_ir_vs_spy": -0.9805,
+      "sleeve_sharpe": -1.0052,
+      "n_cohorts": 1397,
+      "benchmark": "BTC-USD",
+      "note": "benchmark BTC-USD hourly; column sleeve_ir_vs_spy is the T05 name"
+    },
+    {
+      "sleeve": "crypto",
+      "asset_class": "crypto",
+      "model": "logistic",
+      "auc": 0.5267,
+      "brier": 0.2428,
+      "n_long": 2754,
+      "after_cost_mean": 0.0024,
+      "sleeve_ir_vs_spy": 0.2351,
+      "sleeve_sharpe": 1.0451,
+      "n_cohorts": 1397,
+      "benchmark": "BTC-USD",
+      "note": "leads sleeve IR vs BTC at +0.235; not the after-cost-mean winner"
+    },
+    {
+      "sleeve": "crypto",
+      "asset_class": "crypto",
+      "model": "lgbm",
+      "auc": 0.5300,
+      "brier": 0.2432,
+      "n_long": 6831,
+      "after_cost_mean": 0.0028,
+      "sleeve_ir_vs_spy": 0.1113,
+      "sleeve_sharpe": 0.5442,
+      "n_cohorts": 1397,
+      "benchmark": "BTC-USD",
+      "note": "after-cost mean beat rules and logistic; IR trails logistic (+0.111 vs +0.235). Not IR-promoted. CLI stays --backend rules."
     }
   ],
-  "updated_at": "2026-09-27T23:00:00Z"
+  "updated_at": "2026-09-28T00:09:08Z",
+  "benchmark_note": "Crypto sleeve_ir_vs_spy uses BTC-USD hourly, not SPY. LightGBM is not IR-promoted."
 }
