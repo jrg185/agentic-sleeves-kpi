@@ -1001,6 +1001,39 @@
     "running_balance_frac": 1.121619
   },
   {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T14:10:58.367974+00:00",
+    "ticker": "ALGO",
+    "side": "sell",
+    "notional_frac_of_book": 0.044567,
+    "pnl_frac_of_book": 0.002091,
+    "why": "profit-exit +5% reanalyze half-scale (+6.47% vs 0.12605; no profit_exits model; artifact still buy; short-hold)",
+    "running_pnl_frac": 0.12371,
+    "running_balance_frac": 1.12371
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T14:10:58.602617+00:00",
+    "ticker": "DOT",
+    "side": "sell",
+    "notional_frac_of_book": 0.055367,
+    "pnl_frac_of_book": -0.003877,
+    "why": "artifact sell (24h -3.96% vol z=0.92 conv 0.642)",
+    "running_pnl_frac": 0.119833,
+    "running_balance_frac": 1.119833
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T14:10:58.603955+00:00",
+    "ticker": "BONK",
+    "side": "sell",
+    "notional_frac_of_book": 0.072767,
+    "pnl_frac_of_book": -0.005438,
+    "why": "artifact sell (24h -5.12% vol z=0.79 conv 0.667)",
+    "running_pnl_frac": 0.114395,
+    "running_balance_frac": 1.114395
+  },
+  {
     "sleeve": "equities",
     "timestamp_et": "2026-09-25T19:37:00+00:00",
     "ticker": "QCOM",
