@@ -37,7 +37,7 @@ body {
 
 body, button, input { letter-spacing: 0; }
 
-.top, .status, main, .tapes-head, .tapes, .models-head, #models, footer {
+.top, .status, main, .book-block, .tapes-head, .tapes, .models-head, #models, footer {
   width: min(1120px, calc(100% - 32px));
   margin-inline: auto;
 }
@@ -251,6 +251,72 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
 .tapes-head h2 { margin: 0 0 4px; }
 .tapes-head p { margin: 0; }
 
+.block-head { padding: 8px 0 12px; }
+.block-head h2 { margin: 0 0 4px; }
+.block-head p { margin: 0; color: var(--muted); line-height: 1.45; }
+.book-block { padding-top: 8px; }
+.book-block + .book-block { padding-top: 20px; }
+
+.curve-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.curve-controls button {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  border-radius: 999px;
+  min-height: 44px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+.curve-controls button[aria-pressed="true"] {
+  color: var(--ink);
+  border-color: var(--crypto);
+  background: rgba(227, 161, 90, 0.12);
+}
+.chart-frame {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 8px 8px 4px;
+}
+.chart-frame svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  touch-action: pan-y;
+}
+.curve-readout {
+  margin: 8px 2px 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin: 8px 2px 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 99px;
+  display: inline-block;
+}
+.pos + .pos { margin-top: 16px; }
+.pos h3 { margin: 0 0 8px; font-size: 1.35rem; }
+.model-card { scroll-margin-top: 16px; }
+
 .tapes {
   /* One column. The board is capped at 1120px, and each tape needs that
      full width before Running P&L / Running balance fit without a sideways scroll.
@@ -317,6 +383,7 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
 .tape-export:focus-visible,
 .tape-toggle:focus-visible,
 .repo-links a:focus-visible,
+.curve-controls button:focus-visible,
 td.why a:focus-visible {
   outline: 2px solid var(--crypto);
   outline-offset: 2px;
@@ -413,8 +480,8 @@ td.why a {
   word-break: break-all;
   font-size: 0.75rem;
 }
-td.num { font-variant-numeric: tabular-nums; text-align: right; }
-th:nth-child(n+4), td.num { text-align: right; }
+td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; }
+th:nth-child(n+4), td.num, th.num { text-align: right; }
 
 .ticker { font-weight: 560; }
 
@@ -428,8 +495,8 @@ th:nth-child(n+4), td.num { text-align: right; }
   font-size: 0.72rem;
 }
 
-.pill.buy { color: var(--equities); }
-.pill.sell { color: var(--crypto); }
+.pill.buy, .pill.long { color: var(--equities); }
+.pill.sell, .pill.short { color: var(--crypto); }
 
 .empty { color: var(--muted); }
 
@@ -519,7 +586,7 @@ code { color: var(--ink); }
 }
 
 @media (max-width: 420px) {
-  .top, .status, main, .tapes-head, .tapes, .models-head, #models, footer, .tabs {
+  .top, .status, main, .book-block, .tapes-head, .tapes, .models-head, #models, footer, .tabs {
     width: min(1120px, calc(100% - 20px));
   }
   .top { padding-top: 20px; gap: 10px; }

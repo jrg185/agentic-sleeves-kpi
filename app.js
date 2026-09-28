@@ -1,18 +1,23 @@
+import { buildChart, sampleAt } from "./curves.js";
 import {
   deriveSleeve,
   formatPct,
   formatUsd,
   headroomFill,
   labelFor,
+  money,
   sleeveKey,
   sortSleeves,
   tone,
 } from "./derive.js";
+import { positionRows, positionsFor, sortPositions } from "./positions.js";
 import { csvFilename, linkSegments, preferredWhy, tapeCsv, tapeOpenKey } from "./tape.js";
 
 const statusEl = document.querySelector("#status");
 const boardEl = document.querySelector("#board");
 const tapesEl = document.querySelector("#tapes");
+const positionsEl = document.querySelector("#positions");
+const curvesEl = document.querySelector("#curves");
 const modelsEl = document.querySelector("#models");
 const panelSleeves = document.querySelector("#panel-sleeves");
 const panelModels = document.querySelector("#panel-models");
@@ -502,6 +507,217 @@ function render(summaryRows, tradeRows, meta) {
   }
 }
 
+function formatPrice(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "\u2014";
+  const abs = Math.abs(n);
+  const digits = abs >= 1000 ? 2 : abs >= 1 ? 4 : 8;
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: digits })}`;
+}
+
+function formatQty(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return value ? String(value) : "\u2014";
+  return n.toLocaleString("en-US", { maximumFractionDigits: 8 });
+}
+
+function renderPositionTable(title, rows, { showSleeve }) {
+  const section = el("section", "pos");
+  section.append(el("h3", null, title));
+  if (!rows.length) {
+    section.append(el("p", "empty", "No open positions."));
+    return section;
+  }
+  const wrap = el("div", "table-wrap");
+  const table = el("table");
+  const thead = el("thead");
+  const headRow = el("tr");
+  const labels = showSleeve
+    ? ["Sleeve", "Ticker", "Side", "Qty", "Avg", "Mark", "Unrealized"]
+    : ["Ticker", "Side", "Qty", "Avg", "Mark", "Unrealized"];
+  const numeric = new Set(["Qty", "Avg", "Mark", "Unrealized"]);
+  for (const label of labels) {
+    const th = el("th", numeric.has(label) ? "num" : "", label);
+    th.scope = "col";
+    headRow.append(th);
+  }
+  thead.append(headRow);
+  const tbody = el("tbody");
+  for (const row of rows) {
+    const shaped = deriveSleeve({ sleeve: row.sleeve });
+    const frac = readFrac(row, "unrealized_pnl_frac");
+    const dollars = money(shaped.seed, frac);
+    const tr = el("tr");
+    const sideName = String(row.side || "").toLowerCase();
+    const sideCell = el("td");
+    sideCell.append(el("span", `pill ${sideName}`, sideName || "\u2014"));
+    const unrealized = el(
+      "td",
+      `num ${tone(dollars)}`,
+      dollars == null ? "\u2014" : `${formatUsd(dollars, { signed: true })} (${formatPct(frac, { signed: true, digits: 2 })})`
+    );
+    const cells = [];
+    if (showSleeve) cells.push(el("td", null, labelFor(shaped.sleeve)));
+    cells.push(
+      el("td", "ticker", String(row.ticker)),
+      sideCell,
+      el("td", "num", formatQty(row.qty)),
+      el("td", "num", formatPrice(row.avg)),
+      el("td", "num", formatPrice(row.mark)),
+      unrealized
+    );
+    tr.append(...cells);
+    tbody.append(tr);
+  }
+  table.append(thead, tbody);
+  wrap.append(table);
+  section.append(wrap);
+  return section;
+}
+
+function renderPositions(payload) {
+  if (!positionsEl) return;
+  positionsEl.replaceChildren();
+  if (!payload || payload.missing) {
+    positionsEl.append(el("p", "empty", "Open positions are not in this snapshot yet."));
+    return;
+  }
+  const rows = sortPositions(positionRows(payload));
+  positionsEl.append(
+    renderPositionTable("Combined", positionsFor(rows, "combined"), { showSleeve: true }),
+    renderPositionTable("Crypto", positionsFor(rows, "crypto"), { showSleeve: false }),
+    renderPositionTable("Equities", positionsFor(rows, "equities"), { showSleeve: false })
+  );
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+let curveMode = "all";
+let curvePayload = { series: [] };
+
+function svgEl(name, attrs) {
+  const node = document.createElementNS(SVG_NS, name);
+  for (const [key, value] of Object.entries(attrs || {})) node.setAttribute(key, String(value));
+  return node;
+}
+
+function curveReadout(sample) {
+  if (!sample) return "No sleeve history in this snapshot.";
+  const bits = [];
+  for (const sleeve of ["combined", "crypto", "equities"]) {
+    if (sample.values[sleeve] == null) continue;
+    if (curveMode !== "all" && sleeve !== curveMode) continue;
+    const shaped = deriveSleeve({ sleeve });
+    const dollars = money(shaped.seed, sample.values[sleeve]);
+    bits.push(
+      `${labelFor(sleeve)} ${formatUsd(dollars)} (${formatPct(sample.values[sleeve] - 1, { signed: true, digits: 2 })})`
+    );
+  }
+  const when = formatEt(sample.asOf);
+  return [when, bits.join(" · ")].filter(Boolean).join(" · ");
+}
+
+function paintCurves() {
+  if (!curvesEl) return;
+  curvesEl.replaceChildren();
+  if (!curvePayload || curvePayload.missing) {
+    curvesEl.append(el("p", "empty", "Sleeve history is not in this snapshot yet."));
+    return;
+  }
+  const chart = buildChart(curvePayload, curveMode);
+  if (chart.empty) {
+    curvesEl.append(
+      el("p", "empty", curveMode === "all" ? "No sleeve history in this snapshot." : "No points for this series.")
+    );
+    return;
+  }
+  const frame = el("div", "chart-frame");
+  const svg = svgEl("svg", { viewBox: `0 0 ${chart.width} ${chart.height}`, role: "img" });
+  const latest = sampleAt(chart, 1);
+  const title = svgEl("title");
+  title.textContent = `Equity curves. ${curveReadout(latest)}`;
+  svg.append(title);
+  for (const tick of chart.ticks) {
+    svg.append(
+      svgEl("line", {
+        x1: chart.plot.left,
+        x2: chart.plot.right,
+        y1: tick.y,
+        y2: tick.y,
+        stroke: "rgba(244,239,230,0.12)",
+      })
+    );
+    const label = svgEl("text", {
+      x: chart.plot.left - 8,
+      y: tick.y + 4,
+      "text-anchor": "end",
+      fill: "#b3a794",
+      "font-size": "11",
+      "font-family": "Outfit, sans-serif",
+    });
+    label.textContent = tick.frac.toFixed(3);
+    svg.append(label);
+  }
+  const t0 = formatEt(new Date(chart.t0).toISOString());
+  const t1 = formatEt(new Date(chart.t1).toISOString());
+  const x0 = svgEl("text", {
+    x: chart.plot.left,
+    y: chart.height - 8,
+    fill: "#b3a794",
+    "font-size": "11",
+    "font-family": "Outfit, sans-serif",
+  });
+  x0.textContent = t0;
+  const x1 = svgEl("text", {
+    x: chart.plot.right,
+    y: chart.height - 8,
+    "text-anchor": "end",
+    fill: "#b3a794",
+    "font-size": "11",
+    "font-family": "Outfit, sans-serif",
+  });
+  x1.textContent = t1;
+  svg.append(x0, x1);
+  for (const series of chart.series) {
+    svg.append(
+      svgEl("polyline", {
+        fill: "none",
+        stroke: series.color,
+        "stroke-width": "2.25",
+        "stroke-linejoin": "round",
+        "stroke-linecap": "round",
+        points: series.points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" "),
+      })
+    );
+    const last = series.points[series.points.length - 1];
+    svg.append(svgEl("circle", { cx: last.x, cy: last.y, r: 3.5, fill: series.color }));
+  }
+  const readout = el("p", "curve-readout", curveReadout(latest));
+  svg.addEventListener("pointermove", (event) => {
+    const point = svg.createSVGPoint();
+    point.x = event.clientX;
+    point.y = event.clientY;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return;
+    const loc = point.matrixTransform(ctm.inverse());
+    const span = chart.plot.right - chart.plot.left;
+    const ratio = span ? (loc.x - chart.plot.left) / span : 0;
+    readout.textContent = curveReadout(sampleAt(chart, ratio));
+  });
+  svg.addEventListener("pointerleave", () => {
+    readout.textContent = curveReadout(latest);
+  });
+  frame.append(svg);
+  const legend = el("div", "legend");
+  for (const series of chart.series) {
+    const item = el("span");
+    const swatch = el("i");
+    swatch.style.background = series.color;
+    item.append(swatch, document.createTextNode(labelFor(series.sleeve)));
+    legend.append(item);
+  }
+  curvesEl.append(frame, legend, readout);
+}
+
 function showTab(name) {
   const models = name === "models";
   panelSleeves.hidden = models;
@@ -591,10 +807,16 @@ function renderModels(payload, oosPayload, meta) {
   }
   const grid = el("div", "model-grid");
   const used = new Set();
+  const anchored = new Set();
   for (const model of models) {
     const mine = exported.filter((row) => sameSleeve(row, String(model.sleeve || "").toLowerCase()));
     for (const row of mine) used.add(row);
     const card = el("article", "sleeve model-card");
+    const sleeveName = String(model.sleeve || "").toLowerCase();
+    if ((sleeveName === "crypto" || sleeveName === "equities") && !anchored.has(sleeveName)) {
+      card.id = `model-${sleeveName}`;
+      anchored.add(sleeveName);
+    }
     const head = el("header", "sleeve-head");
     head.append(el("h2", null, model.name || "Model"));
     if (model.sleeve) head.append(el("p", "fine", String(model.sleeve)));
@@ -629,9 +851,46 @@ function renderModels(payload, oosPayload, meta) {
   }
 }
 
+function focusModel(hash) {
+  const id = String(hash || "").replace(/^#/, "");
+  if (!id || id === "models") return;
+  const node = document.getElementById(id);
+  if (node) node.scrollIntoView({ block: "start" });
+}
+
+function openFromHash() {
+  const hash = location.hash;
+  if (hash === "#models" || hash.startsWith("#model-")) {
+    showTab("models");
+    focusModel(hash);
+  }
+}
+
 async function main() {
-  tabSleeves.addEventListener("click", () => showTab("sleeves"));
-  tabModels.addEventListener("click", () => showTab("models"));
+  tabSleeves.addEventListener("click", () => {
+    showTab("sleeves");
+    if (location.hash.startsWith("#model")) history.pushState(null, "", `${location.pathname}${location.search}`);
+  });
+  tabModels.addEventListener("click", () => {
+    showTab("models");
+    history.pushState(null, "", "#models");
+  });
+  document.querySelectorAll('a[data-tab="models"]').forEach((anchor) => {
+    anchor.addEventListener("click", () => {
+      showTab("models");
+      requestAnimationFrame(() => focusModel(anchor.getAttribute("href")));
+    });
+  });
+  document.querySelectorAll("[data-curve]").forEach((button) => {
+    button.addEventListener("click", () => {
+      curveMode = button.getAttribute("data-curve") || "all";
+      document.querySelectorAll("[data-curve]").forEach((other) => {
+        other.setAttribute("aria-pressed", other === button ? "true" : "false");
+      });
+      paintCurves();
+    });
+  });
+  window.addEventListener("hashchange", openFromHash);
   let meta = {};
   try {
     meta = await loadJson("data/meta.json", Date.now());
@@ -643,19 +902,27 @@ async function main() {
   }
   const token = meta.fetched_at || meta.export_attempted_at || Date.now();
   try {
-    const [summary, trades, models, oos] = await Promise.all([
+    const [summary, trades, models, oos, positions, curves] = await Promise.all([
       loadJson("data/kpi_summary.json", token),
       loadJson("data/kpi_trades_scrubbed.json", token),
       loadJson("data/models.json", token).catch(() => ({ models: [], note: "data/models.json is not in this snapshot." })),
       loadJson("data/models_oos.json", token).catch(() => ({ rows: [] })),
+      loadJson("data/open_positions.json", token).catch(() => ({ missing: true, positions: [] })),
+      loadJson("data/sleeve_curves.json", token).catch(() => ({ missing: true, series: [] })),
     ]);
     render(summary, trades, meta);
+    renderPositions(positions);
+    curvePayload = curves;
+    paintCurves();
     renderModels(models, oos, meta);
+    openFromHash();
   } catch (error) {
     renderStatus(meta);
     const lines = statusEl.querySelector(".status-lines") || statusEl;
     lines.append(el("p", "status-copy status-error", "KPI JSON did not load."));
     boardEl.replaceChildren(el("p", "empty", String(error.message || error)));
+    if (positionsEl) positionsEl.replaceChildren(el("p", "empty", "Open positions did not load."));
+    if (curvesEl) curvesEl.replaceChildren(el("p", "empty", "Sleeve history did not load."));
   }
 }
 

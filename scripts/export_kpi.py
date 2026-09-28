@@ -22,6 +22,13 @@ Views (fraction / percent rails; no PII):
   public.kpi_summary
   public.kpi_trades_scrubbed
 
+Derived, scrubbed before they are written (no raw dollar columns, no account ids):
+  public.kpi_trades → data/open_positions.json
+    Net open qty by ticker and sleeve, marked with the same public quotes as
+    scripts/refresh_kpi_snapshots.py. unrealized_pnl_frac is that P&L ÷ sleeve seed.
+  public.kpi_sleeve_snapshots → data/sleeve_curves.json
+    History as fractions of the book seed (crypto 300, equities 500, combined 800).
+
 Optional, written when the view exists and skipped when it does not:
   public.models_oos
 """
@@ -69,6 +76,20 @@ DENY_KEYS = {
 }
 
 SEEDS = {"crypto": Decimal("300"), "equities": Decimal("500")}
+# Same book seeds as derive.js SEEDS_USD. Curves and open P&L use these divisors,
+# not a raw account balance, so the page can show seed × fraction.
+BOOK_SEEDS = {
+    "crypto": Decimal("300"),
+    "equities": Decimal("500"),
+    "combined": Decimal("800"),
+}
+SNAPSHOT_USD = (
+    ("realized_pnl_usd", "realized_pnl_frac"),
+    ("unrealized_pnl_usd", "unrealized_pnl_frac"),
+    ("running_pnl_usd", "running_pnl_frac"),
+    ("running_balance_usd", "running_balance_frac"),
+    ("day_pnl_usd", "day_pnl_frac"),
+)
 
 
 def frac(dollars: str | Decimal, seed: Decimal) -> float:
@@ -271,6 +292,97 @@ def attach_running_ledger(rows: list) -> list:
     return out
 
 
+def normalize_sleeve(value) -> str | None:
+    key = str(value or "").strip().lower()
+    if key == "equity":
+        return "equities"
+    if key in BOOK_SEEDS:
+        return key
+    return None
+
+
+def _ratio(dollars: Decimal, seed: Decimal) -> float:
+    return float(q6(dollars / seed))
+
+
+def scrub_snapshot_history(rows: list) -> list:
+    """Warehouse sleeve snapshots as fractions of the book seed.
+
+    Copies only sleeve, as_of, and fraction fields. Dollar columns, notes, and
+    account ids are not written. A row with no book fraction is skipped so the
+    chart does not invent a point.
+    """
+    out = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        sleeve = normalize_sleeve(row.get("sleeve"))
+        as_of = row.get("as_of")
+        seed = BOOK_SEEDS.get(sleeve) if sleeve else None
+        if sleeve is None or seed is None or not as_of:
+            continue
+        item = {"sleeve": sleeve, "as_of": jsonable(as_of)}
+        for src, dest in SNAPSHOT_USD:
+            dollars = _decimal_or_none(row.get(src))
+            if dollars is not None:
+                item[dest] = _ratio(dollars, seed)
+                continue
+            existing = _decimal_or_none(row.get(dest))
+            if existing is not None:
+                item[dest] = float(q6(existing))
+        if "running_balance_frac" not in item and "running_pnl_frac" in item:
+            item["running_balance_frac"] = float(q6(Decimal("1") + Decimal(str(item["running_pnl_frac"]))))
+        if "running_balance_frac" not in item:
+            continue
+        out.append(item)
+    out.sort(key=lambda item: (str(item["as_of"]), item["sleeve"]))
+    return out
+
+
+def scrub_open_positions(fills: list, marks: dict, as_of: str) -> dict:
+    """Net open qty by ticker and sleeve. Unrealized is P&L ÷ sleeve seed.
+
+    `marks` are prices from the same quote path as refresh_kpi_snapshots.
+    A missing mark is an error. The JSON has avg and mark prices plus qty,
+    and does not carry warehouse dollar columns or account ids.
+    """
+    import refresh_kpi_snapshots as refresh
+
+    try:
+        _realized, book = refresh.apply_books(fills)
+    except refresh.RefreshError as exc:
+        raise RuntimeError(str(exc)) from None
+    missing = [f"{sleeve} {ticker}" for sleeve, ticker in sorted(book) if (sleeve, ticker) not in marks]
+    if missing:
+        raise RuntimeError("open tickers have no mark: " + ", ".join(missing))
+    order = {"crypto": 0, "equities": 1}
+    positions = []
+    for (sleeve, ticker), pos in sorted(book.items(), key=lambda item: (order.get(item[0][0], 9), item[0][1])):
+        qty = pos["qty"]
+        if abs(qty) <= refresh.DUST:
+            continue
+        seed = BOOK_SEEDS.get(sleeve)
+        if seed is None:
+            raise RuntimeError(f"open sleeve {sleeve} has no book seed")
+        avg = pos["avg"]
+        mark = Decimal(str(marks[(sleeve, ticker)]))
+        unreal = qty * (mark - avg)
+        positions.append(
+            scrub_row(
+                {
+                    "sleeve": sleeve,
+                    "ticker": ticker,
+                    "side": "long" if qty > 0 else "short",
+                    "qty": format(abs(qty), "f"),
+                    "avg": format(avg, "f"),
+                    "mark": format(mark, "f"),
+                    "unrealized_pnl_frac": _ratio(unreal, seed),
+                }
+            )
+        )
+    return {"as_of": as_of, "positions": positions}
+
+
 def sample_bundle() -> dict:
     """Stand-in rows in the scrubbed view shape. Not a live fetch.
 
@@ -403,6 +515,16 @@ def sample_bundle() -> dict:
     return {
         "kpi_summary": summary,
         "kpi_trades_scrubbed": trades,
+        "open_positions": {
+            "as_of": as_of,
+            "positions": [],
+            "note": "Sample snapshot has no marked open book.",
+        },
+        "sleeve_curves": {
+            "updated_at": as_of,
+            "series": [],
+            "note": "Sample snapshot has no sleeve history.",
+        },
         "models_oos": models_oos,
         "models": models,
         "meta": meta,
@@ -455,6 +577,8 @@ def install_sample(target: Path) -> None:
     bundle = sample_bundle()
     write_json(target / "kpi_summary.json", bundle["kpi_summary"])
     write_json(target / "kpi_trades_scrubbed.json", bundle["kpi_trades_scrubbed"])
+    write_json(target / "open_positions.json", bundle["open_positions"])
+    write_json(target / "sleeve_curves.json", bundle["sleeve_curves"])
     write_json(target / "models_oos.json", bundle["models_oos"])
     write_json(target / "models.json", bundle["models"])
     write_json(target / "meta.json", bundle["meta"])
@@ -485,6 +609,118 @@ def fetch_rest(base_url: str, key: str, view: str) -> list:
     if not isinstance(payload, list):
         raise RuntimeError(f"REST {view} did not return a row list")
     return [scrub_row(row) for row in payload]
+
+
+def fetch_rest_paged(base_url: str, key: str, view: str, order: str) -> list:
+    """Read a public table in pages. Refuses a truncated curve or book."""
+    rows: list = []
+    page = 1000
+    max_pages = 40
+    for page_index in range(max_pages):
+        query = urllib.parse.urlencode(
+            {
+                "select": "*",
+                "order": order,
+                "limit": str(page),
+                "offset": str(page_index * page),
+            }
+        )
+        url = base_url.rstrip("/") + f"/rest/v1/{view}?{query}"
+        request = urllib.request.Request(
+            url,
+            headers={
+                "apikey": key,
+                "Authorization": f"Bearer {key}",
+                "Accept": "application/json",
+                "User-Agent": "agentic-sleeves-kpi-export",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=40) as response:
+                body = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:180]
+            if key and key in detail:
+                detail = detail.replace(key, "[redacted]")
+            if exc.code == 404 or "PGRST205" in detail:
+                raise ViewMissing(view) from None
+            raise RuntimeError(f"REST {view} HTTP {exc.code}: {detail}") from None
+        payload = json.loads(body)
+        if not isinstance(payload, list):
+            raise RuntimeError(f"REST {view} did not return a row list")
+        rows.extend(scrub_row(row) for row in payload if isinstance(row, dict))
+        if len(payload) < page:
+            return rows
+    raise RuntimeError(f"{view} exceeded {page * max_pages} rows; refusing a partial export")
+
+
+def load_trades_for_positions(base_url: str, key: str | None, db_url: str | None) -> list:
+    import refresh_kpi_snapshots as refresh
+
+    secrets = [key or "", db_url or ""]
+    if key:
+        try:
+            return refresh.fetch_trades_rest(base_url, key)
+        except refresh.RefreshError as exc:
+            if not db_url:
+                raise RuntimeError(refresh.redact(str(exc), secrets)) from None
+            print(f"REST read of kpi_trades failed; trying SUPABASE_DB_URL", file=sys.stderr)
+    if not db_url:
+        raise RuntimeError("No Supabase credential")
+    return refresh.fetch_trades_db(db_url, secrets)
+
+
+def load_open_positions(base_url: str, key: str | None, db_url: str | None, as_of: str) -> dict:
+    """Replay kpi_trades and mark opens. Does not invent a price."""
+    import refresh_kpi_snapshots as refresh
+
+    fills = load_trades_for_positions(base_url, key, db_url)
+    try:
+        _realized, book = refresh.apply_books(fills)
+    except refresh.RefreshError as exc:
+        raise RuntimeError(refresh.redact(str(exc), [key or "", db_url or ""])) from None
+    if not book:
+        return {"as_of": as_of, "positions": []}
+    env = refresh.env_values()
+    if base_url:
+        env["SUPABASE_URL"] = base_url
+    if key:
+        env["SUPABASE_SERVICE_ROLE_KEY"] = key
+    if db_url:
+        env["SUPABASE_DB_URL"] = db_url
+    secrets = [
+        env.get("SUPABASE_SERVICE_ROLE_KEY", ""),
+        env.get("SUPABASE_DB_URL", ""),
+        env.get("FINNHUB_API_KEY", ""),
+        env.get("COINSTATS_API_KEY", ""),
+        env.get("ALPHA_VANTAGE_API_KEY", ""),
+    ]
+    try:
+        quotes = refresh.resolve_marks(sorted(book), env)
+    except refresh.RefreshError as exc:
+        raise RuntimeError(refresh.redact(str(exc), secrets)) from None
+    marks = {pair: price for pair, (price, _source) in quotes.items()}
+    return scrub_open_positions(fills, marks, as_of)
+
+
+def load_sleeve_curves(base_url: str, key: str | None, db_url: str | None, updated_at: str) -> dict:
+    if key:
+        try:
+            raw = fetch_rest_paged(base_url, key, "kpi_sleeve_snapshots", "as_of.asc")
+        except ViewMissing:
+            if not db_url:
+                raise
+            raw = fetch_db(db_url, "kpi_sleeve_snapshots")
+        except Exception:
+            if not db_url:
+                raise
+            print("REST read of kpi_sleeve_snapshots failed; trying SUPABASE_DB_URL", file=sys.stderr)
+            raw = fetch_db(db_url, "kpi_sleeve_snapshots")
+    else:
+        if not db_url:
+            raise RuntimeError("No Supabase credential")
+        raw = fetch_db(db_url, "kpi_sleeve_snapshots")
+    return {"updated_at": updated_at, "series": scrub_snapshot_history(raw)}
 
 
 def fetch_db(db_url: str, view: str) -> list:
@@ -603,6 +839,9 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
     rows["kpi_trades_scrubbed"] = attach_running_ledger(
         [reshape_trade_row(row) for row in rows["kpi_trades_scrubbed"]]
     )
+    fetched_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    rows["open_positions"] = load_open_positions(base_url, key, db_url, fetched_at)
+    rows["sleeve_curves"] = load_sleeve_curves(base_url, key, db_url, fetched_at)
     missing = []
     for view in OPTIONAL_VIEWS:
         try:
@@ -613,7 +852,7 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
     # A missing or empty models_oos view must not wipe a committed seed.
     # The page keeps data/models_oos.json until the view returns rows.
     present = [name for name in (*VIEWS, *OPTIONAL_VIEWS) if name not in missing]
-    fetched_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    present.extend(["kpi_trades", "kpi_sleeve_snapshots"])
     rows["meta"] = {
         "source": "supabase",
         "fetched_at": fetched_at,
@@ -623,7 +862,7 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
         "project_ref": PROJECT_REF,
         "views": [f"public.{name}" for name in present],
         "row_counts": {
-            name: len(rows[name]) for name in present if isinstance(rows[name], list)
+            name: len(rows[name]) for name in present if isinstance(rows.get(name), list)
         },
         "note": (
             "Exported from scrubbed views. Balances are sleeve book (cash + MTM; interim start + running P&L), not cash. "
@@ -634,10 +873,16 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
             "why is the full note. "
             "Page dollars are seed × fraction. "
             "Sleeve as_of comes from kpi_sleeve_snapshots, inserted by "
-            "scripts/refresh_kpi_snapshots.py before this export."
+            "scripts/refresh_kpi_snapshots.py before this export. "
+            "open_positions.json is net open qty from kpi_trades, marked with the same "
+            "public quotes as that refresh; unrealized_pnl_frac is the open P&L divided "
+            "by the sleeve seed. sleeve_curves.json is snapshot history as fractions of "
+            "the book seed. Raw dollar columns and account ids are not written."
         ),
         "warehouse_status": "ok",
     }
+    rows["meta"]["row_counts"]["open_positions"] = len(rows["open_positions"]["positions"])
+    rows["meta"]["row_counts"]["sleeve_curves"] = len(rows["sleeve_curves"]["series"])
     if missing:
         rows["meta"]["optional_missing"] = missing
     return rows
@@ -828,6 +1073,13 @@ def stamp_export_failure(
 def write_bundle(target: Path, bundle: dict) -> None:
     for name in (*VIEWS, "meta"):
         write_json(target / f"{name}.json", bundle[name])
+    if isinstance(bundle.get("open_positions"), dict):
+        write_json(target / "open_positions.json", bundle["open_positions"])
+    curves = bundle.get("sleeve_curves")
+    if isinstance(curves, dict):
+        write_json(target / "sleeve_curves.json", curves)
+    elif isinstance(curves, list):
+        write_json(target / "sleeve_curves.json", {"series": curves})
     oos = bundle.get("models_oos")
     if oos_has_rows(oos):
         if isinstance(oos, list):
@@ -973,6 +1225,151 @@ def self_test() -> int:
         raise RuntimeError("frac-only ledger left the last row null")
     if bare[-1]["running_pnl_frac"] != float(q6(Decimal("-0.001833"))):
         raise RuntimeError(f"frac-only running pnl {bare[-1]['running_pnl_frac']}")
+
+    opens = scrub_open_positions(
+        [
+            {
+                "sleeve": "crypto",
+                "ticker": "aaa",
+                "side": "buy",
+                "qty": "10",
+                "avg_price": "2",
+                "pnl_trade_usd": "99",
+                "timestamp_et": "2026-09-01T00:00:00Z",
+                "account_id": "546048042",
+                "order_id": "6ab90000-0000-4000-8000-000000000099",
+            },
+            {
+                "sleeve": "crypto",
+                "ticker": "AAA",
+                "side": "buy",
+                "qty": "10",
+                "avg_price": "4",
+                "pnl_trade_usd": "0",
+                "timestamp_et": "2026-09-02T00:00:00Z",
+            },
+            {
+                "sleeve": "crypto",
+                "ticker": "AAA",
+                "side": "sell",
+                "qty": "5",
+                "avg_price": "5",
+                "pnl_trade_usd": "10",
+                "timestamp_et": "2026-09-03T00:00:00Z",
+            },
+            {
+                "sleeve": "equities",
+                "ticker": "QCOM",
+                "side": "buy",
+                "qty": "2",
+                "avg_price": "100",
+                "pnl_trade_usd": "0",
+                "timestamp_et": "2026-09-04T00:00:00Z",
+            },
+        ],
+        {("crypto", "AAA"): Decimal("4"), ("equities", "QCOM"): Decimal("110")},
+        "2026-09-28T01:00:00Z",
+    )
+    by_ticker = {row["ticker"]: row for row in opens["positions"]}
+    # 15 shares left at avg 3. Mark 4. Unrealized 15 / crypto seed 300.
+    if by_ticker["AAA"]["side"] != "long" or by_ticker["AAA"]["qty"] != "15":
+        raise RuntimeError(f"AAA open qty {by_ticker.get('AAA')}")
+    if by_ticker["AAA"]["unrealized_pnl_frac"] != float(q6(Decimal("15") / Decimal("300"))):
+        raise RuntimeError(f"AAA unrealized frac {by_ticker['AAA']['unrealized_pnl_frac']}")
+    if by_ticker["QCOM"]["unrealized_pnl_frac"] != float(q6(Decimal("20") / Decimal("500"))):
+        raise RuntimeError(f"QCOM unrealized frac {by_ticker['QCOM']['unrealized_pnl_frac']}")
+    public_blob = json.dumps(opens)
+    if "546048042" in public_blob or "unrealized_pnl_usd" in public_blob or "order_id" in public_blob:
+        raise RuntimeError("open positions JSON leaked an account field")
+    if "20.000000" in public_blob or "15.000000" in public_blob:
+        raise RuntimeError("open positions JSON wrote raw unrealized dollars")
+    try:
+        scrub_open_positions(
+            [
+                {
+                    "sleeve": "equities",
+                    "ticker": "QCOM",
+                    "side": "buy",
+                    "qty": "1",
+                    "avg_price": "10",
+                    "pnl_trade_usd": "0",
+                    "timestamp_et": "2026-09-01T00:00:00Z",
+                }
+            ],
+            {},
+            "2026-09-28T01:00:00Z",
+        )
+    except RuntimeError as exc:
+        if "no mark" not in str(exc):
+            raise
+    else:
+        raise RuntimeError("missing open mark did not fail")
+    flat = scrub_open_positions(
+        [
+            {
+                "sleeve": "crypto",
+                "ticker": "W",
+                "side": "buy",
+                "qty": "3",
+                "avg_price": "1",
+                "pnl_trade_usd": "0",
+                "timestamp_et": "2026-09-01T00:00:00Z",
+            },
+            {
+                "sleeve": "crypto",
+                "ticker": "W",
+                "side": "sell",
+                "qty": "3",
+                "avg_price": "2",
+                "pnl_trade_usd": "3",
+                "timestamp_et": "2026-09-02T00:00:00Z",
+            },
+        ],
+        {},
+        "2026-09-28T01:00:00Z",
+    )
+    if flat["positions"]:
+        raise RuntimeError("a flat book should not invent an open position")
+
+    history = scrub_snapshot_history(
+        [
+            {
+                "sleeve": "crypto",
+                "as_of": "2026-09-28T00:00:00Z",
+                "running_balance_usd": "323.77",
+                "running_pnl_usd": "23.77",
+                "realized_pnl_usd": "6.24",
+                "unrealized_pnl_usd": "17.53",
+                "start_balance_usd": "300",
+                "account_id": "546048042",
+                "notes": "realized $6.24; book $323.77",
+            },
+            {
+                "sleeve": "equities",
+                "as_of": "2026-09-27T00:00:00Z",
+                "running_pnl_frac": "0.001740",
+            },
+            {
+                "sleeve": "combined",
+                "as_of": "2026-09-28T00:00:00Z",
+                "running_balance_usd": "824.64",
+                "email": "joe@example.com",
+            },
+        ]
+    )
+    history_blob = json.dumps(history)
+    if "323.77" in history_blob or "546048042" in history_blob or "joe@example.com" in history_blob:
+        raise RuntimeError(f"curve JSON leaked warehouse dollars or an account: {history_blob}")
+    if "$" in history_blob or "running_balance_usd" in history_blob or "notes" in history_blob:
+        raise RuntimeError("curve JSON kept a dollar column or a note")
+    crypto_point = next(row for row in history if row["sleeve"] == "crypto")
+    if crypto_point["running_balance_frac"] != float(q6(Decimal("323.77") / Decimal("300"))):
+        raise RuntimeError(f"crypto curve frac {crypto_point['running_balance_frac']}")
+    equities_point = next(row for row in history if row["sleeve"] == "equities")
+    if equities_point["running_balance_frac"] != float(q6(Decimal("1") + Decimal("0.001740"))):
+        raise RuntimeError("equities curve did not derive book from running P&L")
+    if [row["sleeve"] for row in history] != ["equities", "combined", "crypto"]:
+        raise RuntimeError(f"curve order {history}")
 
     print("self-test ok")
     return 0
