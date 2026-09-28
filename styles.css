@@ -299,7 +299,14 @@ th {
   font-weight: 500;
 }
 
-td.why { white-space: normal; min-width: 8rem; color: var(--muted); }
+td.why {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 10rem;
+  max-width: min(28rem, 70vw);
+  color: var(--muted);
+}
 td.num { font-variant-numeric: tabular-nums; text-align: right; }
 th:nth-child(n+4), td.num { text-align: right; }
 
