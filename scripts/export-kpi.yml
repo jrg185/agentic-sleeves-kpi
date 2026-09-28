@@ -7,7 +7,8 @@ name: Export KPI
 # No feed, including a missing ROBINHOOD_TOKEN, skips that step with exit 0.
 # A requested feed that will not parse exits non-zero and stamps data/meta.json.
 # A failed refresh does the same. Pull requests only self-test.
-# Crypto sleeve only. Marks: public Coinbase ticker (crypto) and Yahoo chart (equities).
+# Sleeve is crypto or equities from asset class. USDC and funding are skipped.
+# Marks: public Coinbase ticker (crypto) and Yahoo chart (equities).
 # FINNHUB_API_KEY, COINSTATS_API_KEY, and ALPHA_VANTAGE_API_KEY are optional.
 # data/** pushes are ignored so the export commit does not run this job again.
 

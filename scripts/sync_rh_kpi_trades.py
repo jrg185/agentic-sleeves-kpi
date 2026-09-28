@@ -12,8 +12,12 @@ A missing ROBINHOOD_TOKEN is that skip, not a failure. Fail-loud (exit 1 and
 stamp data/meta.json) only when a feed was explicitly requested and the input
 or the upsert cannot be applied.
 
-Crypto sleeve only. USDC and funding pairs are skipped. Equities are not
-imported. No orders are placed.
+USDC and funding pairs are skipped. Sleeve is classified, not hardcoded:
+explicit asset_class or instrument_type equity/stock/equities writes
+sleeve "equities"; crypto writes "crypto". With no asset class, currency_code
+or a BASE-QUOTE symbol is crypto, and a bare symbol such as QCOM is equities.
+Crypto's 15-minute poller feeds crypto fills only. Equities Desk owns equity
+fills later. There is no on-fill webhook. No orders are placed.
 
 --from-json schema. PATH is a file, or - for stdin. SYNC_RH_JSON is the same
 document, either raw JSON or a file path. RH_FILLS_PATH and data/rh_fills.json
@@ -28,17 +32,19 @@ Account numbers anywhere in the envelope are ignored and are not written.
 
 Each order object:
 
-  id                     uuid. Required on a filled crypto order that is not
-                         skipped. Stored as order_id.
+  id                     uuid. Required on a filled order that is not skipped.
+                         Stored as order_id.
   state                  "filled" is imported. Any other state is skipped.
                          A missing state is treated as filled.
-  currency_code          MCP ticker, such as "GRT". Preferred over symbol.
-  symbol                 "BASE-QUOTE", such as "BTC-USD". BASE is the ticker.
-                         A symbol with no hyphen and no currency_code is an
-                         equity and is skipped.
+  currency_code          MCP crypto ticker, such as "GRT". Preferred over symbol.
+                         Implies sleeve crypto unless asset_class says equities.
+  symbol                 "BASE-QUOTE", such as "BTC-USD", is crypto and BASE
+                         is the ticker. A bare symbol such as "QCOM" is equities.
   currency_pair          Alias of symbol.
-  asset_class            "equity", "stock", or "equities" is skipped.
-  instrument_type        Same equity skip.
+  asset_class            "crypto" or "cryptocurrency" -> sleeve crypto.
+                         "equity", "stock", or "equities" -> sleeve equities.
+                         Any other explicit class fails the sync.
+  instrument_type        Same as asset_class. Explicit class wins over symbol.
   side                   "buy" or "sell".
   cumulative_quantity    Positive base quantity. First match wins.
   filled_asset_quantity  Same.
@@ -56,11 +62,11 @@ Each order object:
   created_at             Used when executions have no timestamp.
   updated_at             Used when created_at is also absent.
 
-Skipped without error: USDC, a USDC quote (BTC-USDC), ticker USD, equities,
+Skipped without error: USDC, a USDC quote (BTC-USDC), ticker USD,
 and any state other than filled.
 
-Written columns: sleeve "crypto", timestamp_et, ticker, side, qty, avg_price,
-notional_usd, fee_usd, pnl_trade_usd, why, order_id.
+Written columns: sleeve ("crypto" or "equities"), timestamp_et, ticker, side,
+qty, avg_price, notional_usd, fee_usd, pnl_trade_usd, why, order_id.
 why is exactly "RH Agentic sync order <uuid>".
 Opening buys store pnl_trade_usd 0. A closing sell stores price P&L versus
 the open average. Upsert is ON CONFLICT (order_id) DO NOTHING.
@@ -78,6 +84,41 @@ Supabase, same project as refresh and export:
   python3 scripts/sync_rh_kpi_trades.py --from-json fills.json
   python3 scripts/sync_rh_kpi_trades.py --dry-run --from-json fills.json
   python3 scripts/sync_rh_kpi_trades.py --from-json -
+
+Example the crypto poller can pass. Extra MCP fields are ignored. This buy
+maps to sleeve crypto, ticker GRT, pnl_trade_usd 0:
+
+  {
+    "data": {
+      "results": [
+        {
+          "id": "11111111-1111-4111-8111-111111111111",
+          "currency_code": "GRT",
+          "side": "buy",
+          "state": "filled",
+          "cumulative_quantity": "100",
+          "average_price": "0.05",
+          "rounded_executed_notional": "5",
+          "fee": "0.01",
+          "created_at": "2026-09-28T18:00:00Z"
+        }
+      ]
+    }
+  }
+
+An equity fill in the same feed maps to sleeve equities instead of being
+dropped. Crypto's poller does not send these tonight:
+
+  {
+    "id": "77777777-7777-4777-8777-777777777777",
+    "asset_class": "equity",
+    "symbol": "QCOM",
+    "side": "buy",
+    "state": "filled",
+    "cumulative_quantity": "1",
+    "average_price": "170",
+    "created_at": "2026-09-28T15:00:00Z"
+  }
 """
 
 from __future__ import annotations
@@ -201,15 +242,25 @@ def is_usdc(ticker: str, quote: str) -> bool:
     return ticker == "USDC" or quote == "USDC"
 
 
-def is_equity(order: dict) -> bool:
-    """Equities Desk owns these. This sync does not import them."""
+def sleeve_of(order: dict, order_id: str) -> str:
+    """Warehouse sleeve. An explicit asset class wins over the symbol shape."""
     asset = str(order.get("asset_class") or order.get("instrument_type") or "").strip().lower()
     if asset in {"equity", "stock", "equities"}:
-        return True
+        return "equities"
+    if asset in {"crypto", "cryptocurrency"}:
+        return "crypto"
+    if asset:
+        raise SyncError(
+            f"filled order {order_id} asset class {asset!r} is not crypto or equities"
+        )
     if str(order.get("currency_code") or "").strip():
-        return False
-    symbol = str(order.get("symbol") or "").strip()
-    return bool(symbol) and "-" not in symbol
+        return "crypto"
+    symbol = str(order.get("symbol") or order.get("currency_pair") or "").strip()
+    if symbol and "-" not in symbol:
+        return "equities"
+    if symbol:
+        return "crypto"
+    raise SyncError(f"filled order {order_id} has no asset class or symbol")
 
 
 def is_funding(ticker: str, quote: str) -> bool:
@@ -270,10 +321,8 @@ def fill_time(order: dict) -> str:
 
 
 def map_order(order: dict) -> dict | None:
-    """Map one filled crypto order. USDC, funding, equities, and non-fills return None."""
+    """Map one filled order. USDC, funding, and non-fills return None."""
     if not isinstance(order, dict):
-        return None
-    if is_equity(order):
         return None
     state = str(order.get("state") or order.get("derived_state") or "filled").strip().lower()
     if state != "filled":
@@ -284,6 +333,7 @@ def map_order(order: dict) -> dict | None:
     ticker, quote = split_symbol(order)
     if is_usdc(ticker, quote) or is_funding(ticker, quote):
         return None
+    sleeve = sleeve_of(order, order_id)
     if not SYMBOL.fullmatch(ticker):
         raise SyncError(f"filled order {order_id} ticker {ticker!r} is not a mark symbol")
     side = str(order.get("side") or "").strip().lower()
@@ -296,7 +346,7 @@ def map_order(order: dict) -> dict | None:
     if price is None or price <= 0:
         raise SyncError(f"filled order {order_id} has no positive average_price")
     return {
-        "sleeve": "crypto",
+        "sleeve": sleeve,
         "timestamp_et": fill_time(order),
         "ticker": ticker,
         "side": side,
@@ -823,8 +873,32 @@ def self_test() -> int:
         raise SyncError("sell order_id")
     if sell["sleeve"] != "crypto":
         raise SyncError("sell sleeve")
-    if "77777777-7777-4777-8777-777777777777" in by_id:
-        raise SyncError("equity fill was imported")
+    qcom = by_id["77777777-7777-4777-8777-777777777777"]
+    if qcom["sleeve"] != "equities" or qcom["ticker"] != "QCOM" or qcom["pnl_trade_usd"] != "0":
+        raise SyncError(f"equity sleeve {qcom}")
+    bare_equity = map_order(
+        {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "symbol": "AAPL",
+            "side": "buy",
+            "state": "filled",
+            "cumulative_quantity": "1",
+            "average_price": "170",
+            "created_at": "2026-09-28T15:30:00Z",
+        }
+    )
+    if not bare_equity or bare_equity["sleeve"] != "equities" or bare_equity["ticker"] != "AAPL":
+        raise SyncError("bare equity symbol was not classified")
+    try:
+        sleeve_of(
+            {"asset_class": "option", "symbol": "QCOM"},
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        )
+    except SyncError as exc:
+        if "not crypto or equities" not in str(exc):
+            raise
+    else:
+        raise SyncError("unknown asset class was accepted")
     again = drop_known(rows, [{"why": sell["why"]}, {"order_id": btc["order_id"]}])
     if any(row["order_id"] in {sell["order_id"], btc["order_id"]} for row in again):
         raise SyncError("second pass inserted a known order id")

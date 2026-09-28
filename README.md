@@ -151,11 +151,19 @@ python3 scripts/sync_rh_kpi_trades.py --from-json fills.json
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` perform that upsert. `SUPABASE_DB_URL` is optional and is not on the repo today. REST is enough after the SQL below has been applied. The same upsert is `POST /rest/v1/kpi_trades?on_conflict=order_id` with `Prefer: resolution=ignore-duplicates`.
 
-Export KPI runs `scripts/sync_rh_kpi_trades.py` before the snapshot refresh only when a feed is present: the `sync_rh_json` workflow input, `SYNC_RH_JSON`, `RH_FILLS_PATH`, or `data/rh_fills.json`. Crypto sleeve only. USDC and funding pairs are skipped. Equity fills stay with Equities Desk. The script does not call Robinhood.
+Export KPI runs `scripts/sync_rh_kpi_trades.py` before the snapshot refresh only when a feed is present: the `sync_rh_json` workflow input, `SYNC_RH_JSON`, `RH_FILLS_PATH`, or `data/rh_fills.json`. USDC and funding pairs are skipped. `sleeve` is `crypto` or `equities` from `asset_class` (a bare equity symbol also maps to `equities`). Crypto's 15-minute poller feeds crypto fills only. Equities Desk owns equity fills later. There is no on-fill webhook. The script does not call Robinhood.
 
 No feed, and a missing `ROBINHOOD_TOKEN`, both skip with exit 0. Export KPI still refreshes and exports. The pull-request check only runs `--self-test`. If a feed was requested and the JSON is bad, the sync exits 1 and stamps `data/meta.json` (**Export failed**).
 
-`--from-json` accepts a list, `{"results": [...]}`, or an MCP envelope `{"data": {"results": [...]}}`. The field list is the docstring at the top of `scripts/sync_rh_kpi_trades.py`. Account numbers in that envelope are not written.
+`--from-json` accepts a list, `{"results": [...]}`, or an MCP envelope `{"data": {"results": [...]}}`. The field list is the docstring at the top of `scripts/sync_rh_kpi_trades.py`. Account numbers in that envelope are not written. Crypto can feed tonight's MCP fills like this:
+
+```bash
+python3 scripts/sync_rh_kpi_trades.py --from-json - <<'JSON'
+{"data":{"results":[{"id":"11111111-1111-4111-8111-111111111111","currency_code":"GRT","side":"buy","state":"filled","cumulative_quantity":"100","average_price":"0.05","rounded_executed_notional":"5","fee":"0.01","created_at":"2026-09-28T18:00:00Z"}]}}
+JSON
+```
+
+That row is sleeve `crypto`, ticker `GRT`. An object with `"asset_class": "equity"` and `"symbol": "QCOM"` is sleeve `equities` instead. Extra MCP fields are ignored.
 
 Apply [`scripts/migrate_kpi_trades_order_id.sql`](scripts/migrate_kpi_trades_order_id.sql) before the first upsert. It adds nullable `order_id text`, copies uuids out of `RH Agentic backfill order <uuid>` / `RH Agentic sync order <uuid>`, and creates a unique index. When `SUPABASE_DB_URL` is set, the sync runs that file itself. Upserts are `ON CONFLICT (order_id) DO NOTHING`.
 
