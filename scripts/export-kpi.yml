@@ -1,8 +1,9 @@
 name: Export KPI
 
-# Reads SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY only.
-# Does not read ALPHA_VANTAGE_API_KEY or FINNHUB_API_KEY.
-# An empty service role secret leaves the committed data/*.json in place.
+# Refreshes public.kpi_sleeve_snapshots, then reads the scrubbed views.
+# A failed refresh does not commit data JSON.
+# Marks: public Coinbase ticker (crypto) and Yahoo chart (equities).
+# FINNHUB_API_KEY, COINSTATS_API_KEY, and ALPHA_VANTAGE_API_KEY are optional.
 # data/** pushes are ignored so the export commit does not run this job again.
 
 on:
@@ -10,6 +11,7 @@ on:
     branches: [main]
     paths-ignore:
       - "data/**"
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -20,16 +22,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  export:
+  check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Position math
+        run: python3 scripts/refresh_kpi_snapshots.py --self-test
+
+  export:
+    needs: check
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Refresh kpi_sleeve_snapshots
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          COINSTATS_API_KEY: ${{ secrets.COINSTATS_API_KEY }}
+          ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+        run: python3 scripts/refresh_kpi_snapshots.py
+
       - name: Export scrubbed Supabase views
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          KPI_REFRESH_EXPECTED: "1"
         run: python3 scripts/export_kpi.py
 
       - name: Commit refreshed JSON
