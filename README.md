@@ -56,7 +56,7 @@ Workflow: [`.github/workflows/export-kpi.yml`](.github/workflows/export-kpi.yml)
 
 - `workflow_dispatch`, pull requests (position math and the RH fill mapper), and pushes to `main` other than `data/**`
 - schedule: every 15 minutes on weekdays from 13:00–21:45 UTC (covers 9:30am–4:00pm ET in both EDT and EST), and hourly outside that window including weekends
-- Sync filled Robinhood crypto orders into `public.kpi_trades`, refresh `kpi_sleeve_snapshots`, then export. A failed sync or refresh does not commit KPI JSON
+- When a fills feed is present, upsert it into `public.kpi_trades`, then refresh `kpi_sleeve_snapshots` and export. No feed skips the upsert and Export KPI continues. A bad requested feed, or a failed refresh, does not commit KPI JSON
 - Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. `SUPABASE_DB_URL` is optional
 - Crypto marks: public Coinbase ticker, then Yahoo `{SYMBOL}-USD`. Equities marks: Finnhub when `FINNHUB_API_KEY` is set, then Yahoo chart. CoinStats and Alpha Vantage are later fallbacks when those keys are set
 - Writes `data/kpi_summary.json`, `data/kpi_trades_scrubbed.json`, `data/models_oos.json`, and `data/meta.json` when they changed
@@ -69,11 +69,11 @@ The board reads `meta.fetched_at` as **Last refreshed** in America/New_York, and
 
 `public.kpi_summary` is a view over the latest `public.kpi_sleeve_snapshots` row. Re-exporting JSON cannot move `as_of` by itself.
 
-The writer is in this repo: `scripts/refresh_kpi_snapshots.py`. Export KPI runs it after the Robinhood fill sync. It reads `public.kpi_trades` (qty and price), marks open names from public Coinbase and Yahoo quotes, and INSERTs a new snapshot with `as_of` set to now. It does not place orders and it does not change the table schema. Sibling `upsert-warehouse` Actions in `agentic-crypto-signals` and `agentic-equity-signals` write `bars`, `features`, `labels`, and `model_runs`. They are not the sleeve MTM writer.
+The writer is in this repo: `scripts/refresh_kpi_snapshots.py`. Export KPI runs it after the optional Robinhood fill sync. It reads `public.kpi_trades` (qty and price), marks open names from public Coinbase and Yahoo quotes, and INSERTs a new snapshot with `as_of` set to now. It does not place orders and it does not change the table schema. Sibling `upsert-warehouse` Actions in `agentic-crypto-signals` and `agentic-equity-signals` write `bars`, `features`, `labels`, and `model_runs`. They are not the sleeve MTM writer.
 
 Order:
 
-1. Sync inserts new Robinhood fills into `kpi_trades`.
+1. When a fills feed is present, sync inserts new Robinhood fills into `kpi_trades`. With no feed, this step skips.
 2. Refresh inserts `kpi_sleeve_snapshots`.
 3. Export reads `kpi_summary` and `kpi_trades_scrubbed` and commits JSON only if `as_of` is within 15 minutes.
 4. Pages shows that `as_of`.
@@ -138,29 +138,32 @@ Add these repository secrets (Settings → Secrets and variables → Actions). D
 | `FINNHUB_API_KEY` | Optional equities mark. Yahoo chart is the public fallback. |
 | `COINSTATS_API_KEY` | Optional crypto mark after Coinbase and Yahoo. |
 | `ALPHA_VANTAGE_API_KEY` | Optional equities mark after Finnhub and Yahoo. |
-| `RH_API_KEY` | Not set today. Robinhood Crypto Trading API key, sent as `x-api-key`. Joe mints it on the Agentic crypto account. The sync signs GET order requests only. |
-| `RH_BASE64_PRIVATE_KEY` | Not set today. Base64 Ed25519 private-key seed that signs those GET requests. Never printed. This client does not read a bearer token. |
-| `RH_AGENTIC_ACCOUNT` | Optional. Agentic account number passed to v2 orders. When unset, the script uses `546048042`. |
 
-Public Coinbase and Yahoo marks do not need those quote keys.
+Public Coinbase and Yahoo marks do not need those quote keys. There is no Robinhood secret on this Action. `ROBINHOOD_TOKEN` is not required and is not read.
 
-### RH fill sync
+### RH fill sync (path B)
 
-`scripts/sync_rh_kpi_trades.py` runs before the snapshot refresh. Crypto sleeve only. USDC and funding pairs are skipped. Equity fills stay with Equities Desk.
+Standing ingest is outside Actions. About every 15 minutes, Crypto Desk or Wags polls Robinhood Trading MCP, dumps filled orders to JSON, upserts `public.kpi_trades`, then runs **Actions → Export KPI → Run workflow**.
 
-There is no Robinhood login on this Action, and neither repo has a Robinhood secret today. Tonight's book was a one-shot MCP read plus a SQL insert. Wags adds the two required secrets after this names them. Until `RH_API_KEY` and `RH_BASE64_PRIVATE_KEY` are set, and no fills file is present, the sync step exits 1 and stamps `data/meta.json` (**Export failed**). It does not exit 0. The pull-request check only runs `--self-test`.
+```bash
+python3 scripts/sync_rh_kpi_trades.py --from-json fills.json
+```
 
-An operator can still pass `--from-json`, `RH_FILLS_PATH`, or `data/rh_fills.json`. A list, `{"results": [...]}`, or an MCP envelope `{"data": {"results": [...]}}` all work. Account numbers in that envelope are not written.
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` perform that upsert. `SUPABASE_DB_URL` is optional and is not on the repo today. REST is enough after the SQL below has been applied. The same upsert is `POST /rest/v1/kpi_trades?on_conflict=order_id` with `Prefer: resolution=ignore-duplicates`.
 
-Apply [`scripts/migrate_kpi_trades_order_id.sql`](scripts/migrate_kpi_trades_order_id.sql) before the cron writes. It adds nullable `order_id text`, copies uuids out of `RH Agentic backfill order <uuid>` / `RH Agentic sync order <uuid>`, and creates a unique index. When `SUPABASE_DB_URL` is set, the sync runs that file itself. Upserts are `ON CONFLICT (order_id) DO NOTHING`.
+Export KPI runs `scripts/sync_rh_kpi_trades.py` before the snapshot refresh only when a feed is present: the `sync_rh_json` workflow input, `SYNC_RH_JSON`, `RH_FILLS_PATH`, or `data/rh_fills.json`. Crypto sleeve only. USDC and funding pairs are skipped. Equity fills stay with Equities Desk. The script does not call Robinhood.
+
+No feed, and a missing `ROBINHOOD_TOKEN`, both skip with exit 0. Export KPI still refreshes and exports. The pull-request check only runs `--self-test`. If a feed was requested and the JSON is bad, the sync exits 1 and stamps `data/meta.json` (**Export failed**).
+
+`--from-json` accepts a list, `{"results": [...]}`, or an MCP envelope `{"data": {"results": [...]}}`. The field list is the docstring at the top of `scripts/sync_rh_kpi_trades.py`. Account numbers in that envelope are not written.
+
+Apply [`scripts/migrate_kpi_trades_order_id.sql`](scripts/migrate_kpi_trades_order_id.sql) before the first upsert. It adds nullable `order_id text`, copies uuids out of `RH Agentic backfill order <uuid>` / `RH Agentic sync order <uuid>`, and creates a unique index. When `SUPABASE_DB_URL` is set, the sync runs that file itself. Upserts are `ON CONFLICT (order_id) DO NOTHING`.
 
 ```bash
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/migrate_kpi_trades_order_id.sql
 ```
 
-`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` perform the upsert. `SUPABASE_DB_URL` is optional and is not on the repo today. REST is enough after the SQL above has been applied. The client does not read `ROBINHOOD_TOKEN`.
-
-After the migration is applied and `RH_API_KEY` plus `RH_BASE64_PRIVATE_KEY` are set, run **Actions → Export KPI → Run workflow** once. A new Agentic crypto fill then shows on https://jrg185.github.io/the-book/ within one schedule window: 15 minutes during the cash-session cron, otherwise the hourly cron.
+After the migration is applied, a new Agentic crypto fill shows on https://jrg185.github.io/the-book/ once the MCP routine has upserted it and Export KPI has run: within one schedule window after that dispatch (15 minutes on the cash-session cron, otherwise hourly).
 
 After the Supabase secrets are saved, run **Actions → Export KPI → Run workflow**. A successful export sets `meta.source` to `supabase` and replaces the KPI JSON. `fixtures/` and `data/models.json` stay as they are.
 

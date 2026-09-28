@@ -1,16 +1,13 @@
 name: Export KPI
 
-# Syncs filled Robinhood crypto orders into public.kpi_trades, refreshes
-# public.kpi_sleeve_snapshots, then reads the scrubbed views.
-# A failed sync or refresh does not commit KPI JSON. It stamps data/meta.json
-# and the failure step publishes that file only, so a read-only or full disk
-# stays visible.
-# Live sync GET /api/v2/crypto/trading/orders/ for the Agentic account.
-# Required secrets, not set today: RH_API_KEY, RH_BASE64_PRIVATE_KEY.
-# Optional: RH_AGENTIC_ACCOUNT (default 546048042). No bearer token, no login.
-# Missing keys exit non-zero and stamp data/meta.json. Pull requests only self-test.
-# Crypto sleeve only. A fills JSON file is an operator bypass, not the Action path.
-# Marks: public Coinbase ticker (crypto) and Yahoo chart (equities).
+# Refreshes public.kpi_sleeve_snapshots, then reads the scrubbed views.
+# Path B: this Action does not call Robinhood and does not read ROBINHOOD_TOKEN.
+# The kpi_trades sync runs only when a fills feed is present (workflow_dispatch
+# input sync_rh_json, SYNC_RH_JSON, RH_FILLS_PATH, or data/rh_fills.json).
+# No feed, including a missing ROBINHOOD_TOKEN, skips that step with exit 0.
+# A requested feed that will not parse exits non-zero and stamps data/meta.json.
+# A failed refresh does the same. Pull requests only self-test.
+# Crypto sleeve only. Marks: public Coinbase ticker (crypto) and Yahoo chart (equities).
 # FINNHUB_API_KEY, COINSTATS_API_KEY, and ALPHA_VANTAGE_API_KEY are optional.
 # data/** pushes are ignored so the export commit does not run this job again.
 
@@ -27,6 +24,12 @@ on:
       - "data/**"
   pull_request:
   workflow_dispatch:
+    inputs:
+      sync_rh_json:
+        description: "Optional fills JSON or a path to it. Empty skips the RH sync. ROBINHOOD_TOKEN is not used."
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -61,15 +64,14 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          RH_API_KEY: ${{ secrets.RH_API_KEY }}
-          RH_BASE64_PRIVATE_KEY: ${{ secrets.RH_BASE64_PRIVATE_KEY }}
-          RH_AGENTIC_ACCOUNT: ${{ secrets.RH_AGENTIC_ACCOUNT }}
+          SYNC_RH_JSON: ${{ github.event.inputs.sync_rh_json }}
         run: |
           python3 scripts/sync_rh_kpi_trades.py --self-test
-          if [ -n "$RH_API_KEY" ] && [ -n "$RH_BASE64_PRIVATE_KEY" ]; then
-            python3 -m pip install --disable-pip-version-check --break-system-packages 'pynacl>=1.5,<2'
+          if [ -n "${SYNC_RH_JSON}" ] || [ -n "${RH_FILLS_PATH:-}" ] || [ -f data/rh_fills.json ]; then
+            python3 scripts/sync_rh_kpi_trades.py
+          else
+            echo "No RH fills feed. ROBINHOOD_TOKEN is absent and is not required. Skipping kpi_trades sync."
           fi
-          python3 scripts/sync_rh_kpi_trades.py
 
       - name: Refresh kpi_sleeve_snapshots
         env:
@@ -94,9 +96,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- data/kpi_summary.json data/kpi_trades_scrubbed.json data/models_oos.json data/meta.json
-          if [ -f data/rh_kpi_sync_cursor.json ]; then
-            git add -- data/rh_kpi_sync_cursor.json
-          fi
           if git diff --cached --quiet; then
             echo "KPI JSON unchanged."
           else
