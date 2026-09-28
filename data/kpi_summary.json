@@ -1,41 +1,38 @@
 [
   {
+    "as_of": "2026-09-27T23:48:06.11443+00:00",
     "sleeve": "crypto",
-    "as_of": "2026-09-27T19:46:00-04:00",
-    "running_balance_frac": 1.0792333333,
-    "running_pnl_frac": 0.0792333333,
-    "realized_pnl_frac": 0.0208,
-    "unrealized_pnl_frac": 0.0584333333,
-    "day_pnl_frac": null,
     "day_kill_pct": -0.1,
-    "kill_headroom_frac": 0.1,
     "day_target_pct": 0.025,
-    "note": "Realized +$6.24 \u00b7 Unrealized ~+$17.53 \u00b7 Book $323.77. Rails % of book."
+    "realized_pnl_frac": 0.0208,
+    "unrealized_pnl_frac": 0.058433,
+    "kill_headroom_frac": 1.792333,
+    "running_balance_frac": 1.079233,
+    "running_pnl_frac": 0.079233,
+    "note": "book=start+realized+unrealized; realized closed exits only; uPnL open MTM"
   },
   {
+    "as_of": "2026-09-27T23:48:06.11443+00:00",
     "sleeve": "equities",
-    "as_of": "2026-09-27T19:46:00-04:00",
-    "running_balance_frac": 1.00174,
-    "running_pnl_frac": 0.00174,
+    "day_kill_pct": -0.25,
+    "day_target_pct": null,
     "realized_pnl_frac": 0.0,
     "unrealized_pnl_frac": 0.00174,
-    "day_pnl_frac": null,
-    "day_kill_pct": -0.25,
-    "kill_headroom_frac": 0.25,
-    "day_target_pct": null,
-    "note": "Realized $0 \u00b7 Unrealized ~+$0.87 on QCOM \u00b7 Book $500.87."
+    "kill_headroom_frac": 1.00696,
+    "running_balance_frac": 1.00174,
+    "running_pnl_frac": 0.00174,
+    "note": "realized $0; unrealized QCOM MTM ~$0.87"
   },
   {
+    "as_of": "2026-09-27T23:48:06.11443+00:00",
     "sleeve": "combined",
-    "as_of": "2026-09-27T19:46:00-04:00",
-    "running_balance_frac": 1.0308,
-    "running_pnl_frac": 0.0308,
+    "day_kill_pct": null,
+    "day_target_pct": null,
     "realized_pnl_frac": 0.0078,
     "unrealized_pnl_frac": 0.023,
-    "day_pnl_frac": 0,
-    "day_kill_pct": null,
-    "kill_headroom_frac": 0.19375,
-    "day_target_pct": null,
-    "note": "Per-sleeve kill rails. Realized vs unrealized split on sleeve cards (UI wiring in flight)."
+    "kill_headroom_frac": null,
+    "running_balance_frac": 1.0308,
+    "running_pnl_frac": 0.0308,
+    "note": "crypto+equities; split realized vs unrealized"
   }
 ]
