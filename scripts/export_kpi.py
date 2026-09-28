@@ -7,9 +7,12 @@ The browser never sees this script's credentials. Set:
   SUPABASE_SERVICE_ROLE_KEY   PostgREST read of the public views
 
 SUPABASE_URL defaults to the agentic-signals project when unset.
-ALPHA_VANTAGE_API_KEY and FINNHUB_API_KEY are not read.
+ALPHA_VANTAGE_API_KEY and FINNHUB_API_KEY are not read here. Marks are
+applied by scripts/refresh_kpi_snapshots.py before this export.
 With no service role key, the script leaves the committed sample JSON
-in place and exits 0. It does not rewrite data/models.json.
+in place and exits 0, unless KPI_REFRESH_EXPECTED=1. In that case a missing
+credential or a kpi_summary.as_of older than 15 minutes exits non-zero
+and does not rewrite data/*.json. It does not rewrite data/models.json.
 
 Views (fraction / percent rails; no PII):
   public.kpi_summary
@@ -521,6 +524,33 @@ def oos_has_rows(payload) -> bool:
     return False
 
 
+def parse_as_of(value) -> dt.datetime:
+    text = str(value).strip().replace("Z", "+00:00")
+    if " " in text and "T" not in text:
+        text = text.replace(" ", "T", 1)
+    parsed = dt.datetime.fromisoformat(text)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def assert_summary_fresh(rows: list, *, now: dt.datetime | None = None) -> None:
+    """Refuse to write JSON when the view is still the pre-refresh snapshot."""
+    if not rows:
+        raise RuntimeError("kpi_summary is empty after refresh; not writing JSON")
+    current = now or dt.datetime.now(dt.timezone.utc)
+    for row in rows:
+        as_of = row.get("as_of") if isinstance(row, dict) else None
+        if not as_of:
+            raise RuntimeError("kpi_summary row is missing as_of after refresh; not writing JSON")
+        moment = parse_as_of(as_of)
+        if current - moment > dt.timedelta(minutes=15) or moment - current > dt.timedelta(minutes=5):
+            raise RuntimeError(
+                f"kpi_summary as_of {moment.strftime('%Y-%m-%dT%H:%M:%SZ')} is stale after refresh; "
+                "not writing JSON"
+            )
+
+
 def write_bundle(target: Path, bundle: dict) -> None:
     for name in (*VIEWS, "meta"):
         write_json(target / f"{name}.json", bundle[name])
@@ -550,7 +580,19 @@ def main(argv: list[str] | None = None) -> int:
     db_url = (os.environ.get("SUPABASE_DB_URL") or "").strip() or None
     base_url = (os.environ.get("SUPABASE_URL") or DEFAULT_URL).strip()
 
+    refresh_expected = (os.environ.get("KPI_REFRESH_EXPECTED") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
     if not key and not db_url:
+        if refresh_expected:
+            print(
+                "KPI_REFRESH_EXPECTED is set but Supabase credentials are missing; "
+                "refusing to leave KPI JSON unchanged.",
+                file=sys.stderr,
+            )
+            return 1
         print(
             "SUPABASE_SERVICE_ROLE_KEY and SUPABASE_DB_URL are unset; "
             "leaving committed data/*.json in place."
@@ -562,6 +604,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     bundle = export_live(base_url, key, db_url)
+    if refresh_expected:
+        assert_summary_fresh(bundle["kpi_summary"])
     write_bundle(DATA, bundle)
     if not (DATA / "models.json").exists():
         write_json(DATA / "models.json", sample_bundle()["models"])

@@ -41,7 +41,9 @@ Source of truth is the Supabase project **agentic-signals** (`bsnqwgbshwszbjncgl
 https://bsnqwgbshwszbjncglqx.supabase.co
 ```
 
-GitHub Actions reads these scrubbed views and writes JSON into the repo:
+`public.kpi_summary` is a view over the latest `public.kpi_sleeve_snapshots` row. Export only SELECTs that view, so it cannot move `as_of`. The Action runs `scripts/refresh_kpi_snapshots.py` first. That script reads `public.kpi_trades` (qty and price), marks open positions, and INSERTs a new snapshot per sleeve. It does not read `public.kpi_trades_scrubbed`.
+
+GitHub Actions then writes the scrubbed views into the repo:
 
 - `public.kpi_summary` → `data/kpi_summary.json`
 - `public.kpi_trades_scrubbed` → `data/kpi_trades_scrubbed.json`
@@ -50,12 +52,13 @@ GitHub Actions reads these scrubbed views and writes JSON into the repo:
 
 Pages serves that committed JSON. The browser only fetches `data/*.json`.
 
-Workflow source: [`scripts/export-kpi.yml`](scripts/export-kpi.yml). GitHub only runs a workflow from `.github/workflows/`. That copy is not registered yet.
+Workflow: [`.github/workflows/export-kpi.yml`](.github/workflows/export-kpi.yml) (same bytes as [`scripts/export-kpi.yml`](scripts/export-kpi.yml)).
 
-- `workflow_dispatch`, and also when the workflow file or exporter script is pushed to `main`
-- Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from Actions secrets
+- `workflow_dispatch`, pull requests (position math only), and pushes to `main` other than `data/**`
+- Refresh, then export. A failed refresh does not commit JSON
+- Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. `SUPABASE_DB_URL` is optional
+- Crypto marks: public Coinbase ticker, then Yahoo `{SYMBOL}-USD`. Equities marks: Finnhub when `FINNHUB_API_KEY` is set, then Yahoo chart. CoinStats and Alpha Vantage are later fallbacks when those keys are set
 - Writes `data/kpi_summary.json`, `data/kpi_trades_scrubbed.json`, `data/models_oos.json`, and `data/meta.json` when they changed
-- Does not read `ALPHA_VANTAGE_API_KEY` or `FINNHUB_API_KEY`
 - Does not rewrite `data/models.json`
 - Does not deploy Pages and does not change the Pages source
 
@@ -110,13 +113,17 @@ Add these repository secrets (Settings → Secrets and variables → Actions). D
 | Secret | Use |
 | --- | --- |
 | `SUPABASE_URL` | `https://bsnqwgbshwszbjncglqx.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | PostgREST `GET /rest/v1/<view>?select=*` with `apikey` and `Authorization: Bearer`. Used for `kpi_summary`, `kpi_trades_scrubbed`, and `models_oos` when that view exists. Set this the same way as the other Actions secrets. Until it is set, the board keeps the committed sample. |
+| `SUPABASE_SERVICE_ROLE_KEY` | PostgREST read of `kpi_trades` and INSERT into `kpi_sleeve_snapshots`, then `GET /rest/v1/<view>?select=*`. Until it is set, a local export leaves the committed JSON alone. The Action refresh step exits non-zero instead, so it does not commit a stale snapshot. |
+| `SUPABASE_DB_URL` | Optional. Used when REST cannot read `kpi_trades` or the INSERT is rejected. |
+| `FINNHUB_API_KEY` | Optional equities mark. Yahoo chart is the public fallback. |
+| `COINSTATS_API_KEY` | Optional crypto mark after Coinbase and Yahoo. |
+| `ALPHA_VANTAGE_API_KEY` | Optional equities mark after Finnhub and Yahoo. |
 
-`ALPHA_VANTAGE_API_KEY` and `FINNHUB_API_KEY` are already on this repository. Export KPI does not read them.
+Public Coinbase and Yahoo marks do not need those quote keys.
 
 After the Supabase secrets are saved, run **Actions → Export KPI → Run workflow**. A successful export sets `meta.source` to `supabase` and replaces the KPI JSON. `fixtures/` and `data/models.json` stay as they are.
 
-If the service role secret is unset, `scripts/export_kpi.py` exits 0 and leaves the committed JSON alone.
+If the service role secret is unset, a local `scripts/export_kpi.py` exits 0 and leaves the committed JSON alone. `KPI_REFRESH_EXPECTED=1` (set on the export step after refresh) exits non-zero instead.
 
 ## GitHub Pages
 
@@ -127,9 +134,27 @@ The site is https://jrg185.github.io/the-book/
 ## Local preview
 
 ```bash
+python3 scripts/refresh_kpi_snapshots.py --self-test
 python3 scripts/export_kpi.py --install-sample
-python3 -m unittest scripts/test_kpi.py
 python3 -m http.server 8765
+```
+
+Dry-run reads `kpi_trades` and prints the rows it would insert. It does not write:
+
+```bash
+SUPABASE_URL=https://bsnqwgbshwszbjncglqx.supabase.co \
+SUPABASE_SERVICE_ROLE_KEY=... \
+python3 scripts/refresh_kpi_snapshots.py --dry-run
+```
+
+After a live run, `as_of` should be the run time:
+
+```sql
+select sleeve, as_of, realized_pnl_usd, unrealized_pnl_usd,
+       running_pnl_usd, running_balance_usd, start_balance_usd
+from public.kpi_sleeve_snapshots
+order by as_of desc
+limit 6;
 ```
 
 Open http://127.0.0.1:8765/
