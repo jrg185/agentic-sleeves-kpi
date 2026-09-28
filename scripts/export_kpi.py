@@ -11,8 +11,11 @@ ALPHA_VANTAGE_API_KEY and FINNHUB_API_KEY are not read here. Marks are
 applied by scripts/refresh_kpi_snapshots.py before this export.
 With no service role key, the script leaves the committed sample JSON
 in place and exits 0, unless KPI_REFRESH_EXPECTED=1. In that case a missing
-credential or a kpi_summary.as_of older than 15 minutes exits non-zero
-and does not rewrite data/*.json. It does not rewrite data/models.json.
+credential or the latest kpi_summary.as_of per sleeve older than 15 minutes
+exits non-zero and does not rewrite data/*.json. Older snapshots for the
+same sleeve are ignored. It does not rewrite data/models.json.
+
+  python3 scripts/export_kpi.py --self-test
 
 Views (fraction / percent rails; no PII):
   public.kpi_summary
@@ -484,6 +487,7 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
     for view in VIEWS:
         rows[view] = load_view(base_url, key, db_url, view)
     rows["kpi_summary"] = [reshape_summary_row(row) for row in rows["kpi_summary"]]
+    rows["kpi_summary"] = latest_summary_rows(rows["kpi_summary"])
     rows["kpi_trades_scrubbed"] = [reshape_trade_row(row) for row in rows["kpi_trades_scrubbed"]]
     missing = []
     for view in OPTIONAL_VIEWS:
@@ -534,8 +538,53 @@ def parse_as_of(value) -> dt.datetime:
     return parsed.astimezone(dt.timezone.utc)
 
 
+def latest_summary_rows(rows: list) -> list:
+    """Keep the row with the greatest as_of for each sleeve.
+
+    A history dump of kpi_sleeve_snapshots must not fail freshness on an
+    older sibling, and must not be written into kpi_summary.json. A sleeve
+    with no as_of keeps one row so assert_summary_fresh still fails loud.
+    Empty input is unchanged.
+    """
+    if not rows:
+        return list(rows)
+
+    groups: dict[str, list] = {}
+    order: list[str] = []
+    for index, row in enumerate(rows):
+        sleeve = row.get("sleeve") if isinstance(row, dict) else None
+        if sleeve is None or str(sleeve).strip() == "":
+            key = f"\0{index}"
+        else:
+            key = str(sleeve).strip().lower()
+        if key not in groups:
+            order.append(key)
+            groups[key] = []
+        groups[key].append(row)
+
+    latest: list = []
+    for key in order:
+        cohort = groups[key]
+        chosen = None
+        chosen_at = None
+        for row in cohort:
+            as_of = row.get("as_of") if isinstance(row, dict) else None
+            if not as_of:
+                continue
+            moment = parse_as_of(as_of)
+            if chosen_at is None or moment >= chosen_at:
+                chosen = row
+                chosen_at = moment
+        latest.append(cohort[0] if chosen is None else chosen)
+    return latest
+
+
 def assert_summary_fresh(rows: list, *, now: dt.datetime | None = None) -> None:
-    """Refuse to write JSON when the view is still the pre-refresh snapshot."""
+    """Refuse to write JSON when the latest sleeve snapshot is still pre-refresh.
+
+    Pass rows from latest_summary_rows. Empty input, a missing as_of, or an
+    as_of outside the window fails.
+    """
     if not rows:
         raise RuntimeError("kpi_summary is empty after refresh; not writing JSON")
     current = now or dt.datetime.now(dt.timezone.utc)
@@ -561,6 +610,60 @@ def write_bundle(target: Path, bundle: dict) -> None:
         write_json(target / "models_oos.json", oos)
 
 
+def self_test() -> int:
+    """Mixed history passes; a cohort whose latest rows are all stale fails."""
+    now = dt.datetime(2026, 9, 28, 1, 30, tzinfo=dt.timezone.utc)
+    fresh = (now - dt.timedelta(minutes=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    stale = "2026-09-27T23:48:00Z"
+    mixed = [
+        {"sleeve": "crypto", "as_of": stale, "note": "old"},
+        {"sleeve": "equities", "as_of": stale, "note": "old"},
+        {"sleeve": "crypto", "as_of": fresh, "note": "new"},
+        {"sleeve": "combined", "as_of": stale, "note": "old"},
+        {"sleeve": "equities", "as_of": fresh, "note": "new"},
+        {"sleeve": "combined", "as_of": fresh, "note": "new"},
+        {"sleeve": "crypto"},
+    ]
+    latest = latest_summary_rows(mixed)
+    if len(latest) != 3 or any(row.get("note") != "new" for row in latest):
+        raise RuntimeError(f"latest-as_of filter kept the wrong rows: {latest}")
+    assert_summary_fresh(latest, now=now)
+
+    older = (now - dt.timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    all_stale = [
+        {"sleeve": "crypto", "as_of": older},
+        {"sleeve": "crypto", "as_of": stale},
+        {"sleeve": "equities", "as_of": stale},
+        {"sleeve": "combined", "as_of": stale},
+    ]
+    try:
+        assert_summary_fresh(latest_summary_rows(all_stale), now=now)
+    except RuntimeError as exc:
+        if "stale" not in str(exc):
+            raise
+    else:
+        raise RuntimeError("all-stale kpi_summary did not fail freshness")
+
+    try:
+        assert_summary_fresh([])
+    except RuntimeError as exc:
+        if "empty" not in str(exc):
+            raise
+    else:
+        raise RuntimeError("empty kpi_summary did not fail")
+
+    try:
+        assert_summary_fresh(latest_summary_rows([{"sleeve": "crypto"}]), now=now)
+    except RuntimeError as exc:
+        if "as_of" not in str(exc):
+            raise
+    else:
+        raise RuntimeError("missing as_of did not fail")
+
+    print("self-test ok")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -568,7 +671,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Write the committed sample into data/ and fixtures/ and exit",
     )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Check latest-as_of filtering against the freshness window, then exit",
+    )
     args = parser.parse_args(argv)
+
+    if args.self_test:
+        return self_test()
 
     if args.install_sample:
         install_sample(DATA)
