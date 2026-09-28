@@ -106,5 +106,57 @@ class ExportStatusTests(unittest.TestCase):
         self.assertIn("unset", meta["export_error"])
 
 
+class TapeLedgerTests(unittest.TestCase):
+    def test_committed_scrubbed_tape_gets_a_running_ledger(self):
+        from decimal import Decimal
+
+        path = Path(__file__).resolve().parents[1] / "data" / "kpi_trades_scrubbed.json"
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        bare = []
+        for row in raw:
+            bare.append(
+                {
+                    key: value
+                    for key, value in row.items()
+                    if key not in {"running_pnl_frac", "running_balance_frac"}
+                }
+            )
+        out = export_kpi.attach_running_ledger(bare)
+        crypto = sorted(
+            (row for row in out if row.get("sleeve") == "crypto"),
+            key=lambda row: row["timestamp_et"],
+        )
+        self.assertGreater(len(crypto), 1)
+        last = crypto[-1]
+        self.assertIsNotNone(last["running_pnl_frac"])
+        self.assertIsNotNone(last["running_balance_frac"])
+        self.assertAlmostEqual(last["running_balance_frac"], 1 + last["running_pnl_frac"], places=6)
+        # Current committed tape: 44 crypto fills, last GRT sell on 2026-09-28.
+        self.assertEqual(last["ticker"], "GRT")
+        self.assertEqual(last["side"], "sell")
+        self.assertAlmostEqual(last["running_pnl_frac"], float(export_kpi.q6(Decimal("0.081699"))), places=6)
+        committed = [
+            row for row in raw if row.get("sleeve") == "crypto"
+        ]
+        committed.sort(key=lambda row: row["timestamp_et"])
+        self.assertEqual(committed[-1]["running_pnl_frac"], last["running_pnl_frac"])
+        self.assertEqual(committed[-1]["running_balance_frac"], last["running_balance_frac"])
+        long_why = "n" * 240
+        kept = export_kpi.attach_running_ledger(
+            [
+                {
+                    "sleeve": "crypto",
+                    "timestamp_et": "2026-09-27T00:00:00+00:00",
+                    "ticker": "W",
+                    "side": "buy",
+                    "pnl_frac_of_book": 0,
+                    "why": long_why,
+                }
+            ]
+        )
+        self.assertEqual(kept[0]["why"], long_why)
+        self.assertEqual(len(kept[0]["why"]), 240)
+
+
 if __name__ == "__main__":
     unittest.main()

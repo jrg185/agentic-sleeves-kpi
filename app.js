@@ -298,7 +298,11 @@ function renderTape(sleeve, trades) {
   }
   const wrap = el("div", "table-wrap");
   const table = el("table");
-  const caption = el("caption", null, `${labelFor(sleeve)} fills. Trade P&L dollars are the book seed times the trade fraction of book.`);
+  const caption = el(
+    "caption",
+    null,
+    `${labelFor(sleeve)} fills. Trade P&L, running P&L, and running balance are the book seed times the fraction. Running balance is start plus realized P&L through that fill.`
+  );
   const thead = el("thead");
   const headRow = el("tr");
   for (const label of ["Time", "Ticker", "Side", "Notional", "Trade P&L", "Running P&L", "Running balance (book)", "Why"]) {
@@ -325,8 +329,11 @@ function renderTape(sleeve, trades) {
       el("td", `num ${tone(pnl)}`, formatUsd(pnl, { signed: true })),
       el("td", `num ${tone(shaped.runningPnl)}`, formatUsd(shaped.runningPnl, { signed: true })),
       el("td", `num ${tone(shaped.runningBalance)}`, formatUsd(shaped.runningBalance)),
-      el("td", "why", trade.why || ""),
     ];
+    const whyText = trade.why == null ? "" : String(trade.why);
+    const whyCell = el("td", "why", whyText);
+    if (whyText) whyCell.title = whyText;
+    cells.push(whyCell);
     tr.append(...cells);
     tbody.append(tr);
   }

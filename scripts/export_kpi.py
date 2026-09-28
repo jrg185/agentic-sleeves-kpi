@@ -32,11 +32,12 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -146,17 +147,127 @@ def reshape_summary_row(row: dict) -> dict:
 
 
 def reshape_trade_row(row: dict) -> dict:
-    """Fill running_balance_frac is book at that fill, not cash left over."""
+    """Keep the row. Running ledger is applied later by attach_running_ledger."""
     if not isinstance(row, dict):
         return row
-    out = dict(row)
-    pnl = _as_float(out.get("running_pnl_frac"))
-    if pnl is None:
-        return out
-    book = float((Decimal(str(pnl)) + 1).quantize(Decimal("0.000001")))
-    bal = _as_float(out.get("running_balance_frac"))
-    if bal is None or bal < 0.95:
-        out["running_balance_frac"] = book
+    return dict(row)
+
+
+# Tape ledger seeds. Same dollars as derive.js SEEDS_USD. Not read from a sheet.
+LEDGER_SEEDS = {"crypto": Decimal("300"), "equities": Decimal("500")}
+LEDGER_QUANT = Decimal("0.000001")
+MACHINE_WHY = re.compile(
+    r"^RH Agentic (?:backfill|sync) order "
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+def q6(value: Decimal) -> Decimal:
+    """Six-decimal fraction. Half away from zero, matching Postgres round(numeric, 6)."""
+    return value.quantize(LEDGER_QUANT, rounding=ROUND_HALF_UP)
+
+
+def _decimal_or_none(value):
+    if value is None or value == "":
+        return None
+    try:
+        return Decimal(str(value))
+    except Exception:
+        return None
+
+
+def _text_or_none(value):
+    if value is None:
+        return None
+    return str(value)
+
+
+def full_why(row: dict):
+    """Return the full note. Never slices.
+
+    A machine `RH Agentic backfill|sync order <uuid>` yields to a human notes
+    field when that field is present. A why that is only a prefix of notes
+    (view left()) yields to the longer notes text.
+    """
+    if not isinstance(row, dict):
+        return None
+    why_text = _text_or_none(row.get("why"))
+    notes_value = row.get("notes") if "notes" in row else row.get("note")
+    notes_text = _text_or_none(notes_value)
+    why_stripped = "" if why_text is None else why_text.strip()
+    notes_stripped = "" if notes_text is None else notes_text.strip()
+    notes_human = bool(notes_stripped) and not MACHINE_WHY.match(notes_stripped)
+    if notes_human and (
+        MACHINE_WHY.match(why_stripped)
+        or (why_stripped and notes_text.startswith(why_text) and len(notes_text) > len(why_text))
+    ):
+        return notes_text
+    if why_text is not None:
+        return why_text
+    if notes_human:
+        return notes_text
+    return None
+
+
+def _trade_pnl_usd(row: dict, seed: Decimal, use_dollars: bool) -> Decimal:
+    if use_dollars:
+        pnl = _decimal_or_none(row.get("pnl_trade_usd"))
+        if pnl is None:
+            pnl = _decimal_or_none(row.get("pnl_usd"))
+        if pnl is not None:
+            return pnl
+    frac = _decimal_or_none(row.get("pnl_frac_of_book"))
+    if frac is None:
+        frac = _decimal_or_none(row.get("pnl_frac"))
+    if frac is None:
+        return Decimal("0")
+    return frac * seed
+
+
+def attach_running_ledger(rows: list) -> list:
+    """Regenerate running realized P&L and book balance per sleeve.
+
+    Chronological (timestamp, ticker, side, original index). Book at the fill
+    is seed + cumulative pnl_trade_usd, as a fraction of the sleeve seed.
+    Opening fills with a null trade P&L count as zero. Does not read a sheet.
+    Overwrites any running_* the view already sent. Does not truncate why.
+    """
+    out = [dict(row) if isinstance(row, dict) else row for row in rows]
+    grouped: dict[str, list[int]] = {}
+    for index, row in enumerate(out):
+        if not isinstance(row, dict):
+            continue
+        sleeve = str(row.get("sleeve") or "").strip().lower()
+        grouped.setdefault(sleeve, []).append(index)
+    for sleeve, indexes in grouped.items():
+        seed = LEDGER_SEEDS.get(sleeve)
+        if seed is None or seed == 0:
+            continue
+        use_dollars = any(
+            _decimal_or_none(out[i].get("pnl_trade_usd")) is not None
+            or _decimal_or_none(out[i].get("pnl_usd")) is not None
+            for i in indexes
+        )
+        ordered = sorted(
+            indexes,
+            key=lambda i: (
+                str(out[i].get("timestamp_et") or out[i].get("ts") or ""),
+                str(out[i].get("ticker") or ""),
+                str(out[i].get("side") or ""),
+                i,
+            ),
+        )
+        cum = Decimal("0")
+        for i in ordered:
+            row = out[i]
+            cum += _trade_pnl_usd(row, seed, use_dollars)
+            running = q6(cum / seed)
+            balance = q6((seed + cum) / seed)
+            row["running_pnl_frac"] = float(running)
+            row["running_balance_frac"] = float(balance)
+            why = full_why(row)
+            if why is not None:
+                row["why"] = why
     return out
 
 
@@ -489,7 +600,9 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
         rows[view] = load_view(base_url, key, db_url, view)
     rows["kpi_summary"] = [reshape_summary_row(row) for row in rows["kpi_summary"]]
     rows["kpi_summary"] = latest_summary_rows(rows["kpi_summary"])
-    rows["kpi_trades_scrubbed"] = [reshape_trade_row(row) for row in rows["kpi_trades_scrubbed"]]
+    rows["kpi_trades_scrubbed"] = attach_running_ledger(
+        [reshape_trade_row(row) for row in rows["kpi_trades_scrubbed"]]
+    )
     missing = []
     for view in OPTIONAL_VIEWS:
         try:
@@ -516,6 +629,9 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
             "Exported from scrubbed views. Balances are sleeve book (cash + MTM; interim start + running P&L), not cash. "
             "kpi_summary remaps running_bal_vs_start, pnl_pct_of_book, and notes "
             "onto running_balance_frac, running_pnl_frac, and note. "
+            "Tape running_pnl_frac and running_balance_frac are regenerated per sleeve "
+            "from warehouse trade P&L (seed + cumulative realized), not from a sheet. "
+            "why is the full note. "
             "Page dollars are seed × fraction. "
             "Sleeve as_of comes from kpi_sleeve_snapshots, inserted by "
             "scripts/refresh_kpi_snapshots.py before this export."
@@ -768,6 +884,75 @@ def self_test() -> int:
             raise
     else:
         raise RuntimeError("missing as_of did not fail")
+
+    long_why = "artifact buy " + ("x" * 400)
+    fills = [
+        {
+            "sleeve": "crypto",
+            "timestamp_et": "2026-09-27T18:00:00+00:00",
+            "ticker": "W",
+            "side": "sell",
+            "pnl_trade_usd": "2.20",
+            "why": "later",
+        },
+        {
+            "sleeve": "crypto",
+            "timestamp_et": "2026-09-26T16:00:00+00:00",
+            "ticker": "QNT",
+            "side": "sell",
+            "pnl_trade_usd": "3.98",
+            "why": long_why,
+        },
+        {
+            "sleeve": "crypto",
+            "timestamp_et": "2026-09-26T12:00:00+00:00",
+            "ticker": "AVAX",
+            "side": "buy",
+            "pnl_trade_usd": "0",
+            "why": "RH Agentic backfill order 6ab7f4a2-5444-4593-84ea-e78f57dc0cf6",
+            "notes": "backfill from RH",
+        },
+        {
+            "sleeve": "equities",
+            "timestamp_et": "2026-09-25T19:37:00+00:00",
+            "ticker": "QCOM",
+            "side": "buy",
+            "pnl_frac_of_book": 0,
+            "why": "SWING unlock Joe/Wags; soft tgt flexible",
+        },
+    ]
+    ledger = attach_running_ledger(fills)
+    crypto = [row for row in ledger if row["sleeve"] == "crypto"]
+    by_ticker = {row["ticker"]: row for row in crypto}
+    if by_ticker["AVAX"]["running_pnl_frac"] != 0:
+        raise RuntimeError(f"AVAX running pnl {by_ticker['AVAX']['running_pnl_frac']}")
+    if by_ticker["QNT"]["running_pnl_frac"] != float(q6(Decimal("3.98") / Decimal("300"))):
+        raise RuntimeError(f"QNT running pnl {by_ticker['QNT']['running_pnl_frac']}")
+    expected_last = q6(Decimal("6.18") / Decimal("300"))
+    if by_ticker["W"]["running_pnl_frac"] != float(expected_last):
+        raise RuntimeError(f"W running pnl {by_ticker['W']['running_pnl_frac']}")
+    if by_ticker["W"]["running_balance_frac"] != float(q6((Decimal("300") + Decimal("6.18")) / Decimal("300"))):
+        raise RuntimeError(f"W running balance {by_ticker['W']['running_balance_frac']}")
+    if by_ticker["W"]["running_pnl_frac"] is None or by_ticker["W"]["running_balance_frac"] is None:
+        raise RuntimeError("last crypto fill ledger is null")
+    if by_ticker["QNT"]["why"] != long_why:
+        raise RuntimeError("why was truncated")
+    if by_ticker["AVAX"]["why"] != "backfill from RH":
+        raise RuntimeError(f"machine why was not replaced: {by_ticker['AVAX']['why']}")
+    equities = [row for row in ledger if row["sleeve"] == "equities"]
+    if len(equities) != 1 or equities[0]["running_pnl_frac"] != 0 or equities[0]["running_balance_frac"] != 1:
+        raise RuntimeError(f"equities ledger {equities}")
+    # Scrubbed rows have no dollar P&L. Summing pnl_frac_of_book still fills the last row.
+    bare = attach_running_ledger(
+        [
+            {"sleeve": "crypto", "timestamp_et": "2026-09-26T16:36:50+00:00", "ticker": "AVAX", "side": "buy", "pnl_frac_of_book": 0, "why": "a"},
+            {"sleeve": "crypto", "timestamp_et": "2026-09-26T18:22:05+00:00", "ticker": "AVAX", "side": "sell", "pnl_frac_of_book": -0.001833, "why": "b"},
+        ]
+    )
+    if bare[-1]["running_pnl_frac"] is None or bare[-1]["running_balance_frac"] is None:
+        raise RuntimeError("frac-only ledger left the last row null")
+    if bare[-1]["running_pnl_frac"] != float(q6(Decimal("-0.001833"))):
+        raise RuntimeError(f"frac-only running pnl {bare[-1]['running_pnl_frac']}")
 
     print("self-test ok")
     return 0
