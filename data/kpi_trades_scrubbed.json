@@ -266,9 +266,9 @@
   {
     "sleeve": "crypto",
     "timestamp_et": "2026-09-27T21:56:25+00:00",
-    "ticker": "NEAR",
+    "ticker": "IMX",
     "side": "buy",
-    "notional_frac_of_book": 0.0903,
+    "notional_frac_of_book": 0.0898,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
     "running_pnl_frac": 0.025461,
@@ -277,9 +277,9 @@
   {
     "sleeve": "crypto",
     "timestamp_et": "2026-09-27T21:56:25+00:00",
-    "ticker": "IMX",
+    "ticker": "NEAR",
     "side": "buy",
-    "notional_frac_of_book": 0.0898,
+    "notional_frac_of_book": 0.0903,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
     "running_pnl_frac": 0.025461,
@@ -299,22 +299,22 @@
   {
     "sleeve": "crypto",
     "timestamp_et": "2026-09-27T22:53:18+00:00",
-    "ticker": "SEI",
+    "ticker": "CRV",
     "side": "buy",
-    "notional_frac_of_book": 0.091233,
+    "notional_frac_of_book": 0.074567,
     "pnl_frac_of_book": 0.0,
-    "why": "artifact buy $27.64 conv 0.92 (+7.73% 24h vol z=2.99)",
+    "why": "artifact buy $22.59 conv 0.75 (+2.10% 24h vol z=5.96)",
     "running_pnl_frac": 0.020794,
     "running_balance_frac": 1.020794
   },
   {
     "sleeve": "crypto",
     "timestamp_et": "2026-09-27T22:53:18+00:00",
-    "ticker": "CRV",
+    "ticker": "SEI",
     "side": "buy",
-    "notional_frac_of_book": 0.074567,
+    "notional_frac_of_book": 0.091233,
     "pnl_frac_of_book": 0.0,
-    "why": "artifact buy $22.59 conv 0.75 (+2.10% 24h vol z=5.96)",
+    "why": "artifact buy $27.64 conv 0.92 (+7.73% 24h vol z=2.99)",
     "running_pnl_frac": 0.020794,
     "running_balance_frac": 1.020794
   },
@@ -328,17 +328,6 @@
     "why": "artifact buy $22.27 conv 0.74 (+8.28% 24h vol z=0.55)",
     "running_pnl_frac": 0.020794,
     "running_balance_frac": 1.020794
-  },
-  {
-    "sleeve": "equities",
-    "timestamp_et": "2026-09-25T19:37:00+00:00",
-    "ticker": "QCOM",
-    "side": "buy",
-    "notional_frac_of_book": 0.3,
-    "pnl_frac_of_book": 0.0,
-    "why": "SWING unlock Joe/Wags; soft tgt flexible",
-    "running_pnl_frac": 0.0,
-    "running_balance_frac": 1.0
   },
   {
     "sleeve": "crypto",
@@ -493,5 +482,16 @@
     "why": "RH Agentic backfill order 6ab9cbc1-b5ab-4951-a49a-597bb68619a3",
     "running_pnl_frac": 0.081699,
     "running_balance_frac": 1.081699
+  },
+  {
+    "sleeve": "equities",
+    "timestamp_et": "2026-09-25T19:37:00+00:00",
+    "ticker": "QCOM",
+    "side": "buy",
+    "notional_frac_of_book": 0.3,
+    "pnl_frac_of_book": 0.0,
+    "why": "SWING unlock Joe/Wags; soft tgt flexible",
+    "running_pnl_frac": 0.0,
+    "running_balance_frac": 1.0
   }
 ]
