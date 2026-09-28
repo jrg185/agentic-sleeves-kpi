@@ -939,6 +939,26 @@ def self_test() -> int:
         raise RuntimeError("why was truncated")
     if by_ticker["AVAX"]["why"] != "backfill from RH":
         raise RuntimeError(f"machine why was not replaced: {by_ticker['AVAX']['why']}")
+    cleared = attach_running_ledger(
+        [
+            {
+                "sleeve": "crypto",
+                "timestamp_et": "2026-09-28T12:00:00+00:00",
+                "ticker": "OP",
+                "side": "buy",
+                "pnl_trade_usd": "0",
+                "why": None,
+                "order_id": "6ab90000-0000-4000-8000-000000000004",
+            }
+        ]
+    )
+    if cleared[0].get("why") not in (None, ""):
+        raise RuntimeError(f"cleared why was rewritten {cleared[0].get('why')!r}")
+    if "sync order" in json.dumps(cleared):
+        raise RuntimeError("export invented a sync-order why")
+    scrubbed = scrub_row(cleared[0])
+    if "order_id" in scrubbed or "order_id" not in DENY_KEYS:
+        raise RuntimeError("order_id would be written to Pages JSON")
     equities = [row for row in ledger if row["sleeve"] == "equities"]
     if len(equities) != 1 or equities[0]["running_pnl_frac"] != 0 or equities[0]["running_balance_frac"] != 1:
         raise RuntimeError(f"equities ledger {equities}")
