@@ -253,14 +253,12 @@ function renderSleeve(derived, { hero = false } = {}) {
   }
   grid.append(headroom);
 
-  if (derived.dayTargetFrac != null || derived.sleeve === "crypto") {
-    const target = metric("Day target");
-    const bits = [formatPct(derived.dayTargetFrac, { signed: true })];
-    if (derived.dayTarget != null) bits.push(formatUsd(derived.dayTarget, { signed: true }));
-    target.querySelector(".v").replaceChildren(pair(bits[0], bits[1] || ""));
-    if (derived.sleeve === "crypto") target.append(el("p", "fine", "Realized only"));
-    grid.append(target);
-  }
+  const target = metric("Day target");
+  const bits = [formatPct(derived.dayTargetFrac, { signed: true })];
+  if (derived.dayTarget != null) bits.push(formatUsd(derived.dayTarget, { signed: true }));
+  target.querySelector(".v").replaceChildren(pair(bits[0], bits[1] || ""));
+  if (derived.sleeve === "crypto") target.append(el("p", "fine", "Realized only"));
+  grid.append(target);
 
   card.append(grid);
   if (derived.note) card.append(el("p", "note", String(derived.note)));
@@ -430,15 +428,17 @@ function renderTape(sleeve, trades) {
 
   const wrap = el("div", "table-wrap");
   const table = el("table");
-  const caption = el(
-    "caption",
-    null,
-    `${labelFor(sleeve)} fills. Trade P&L, running P&L, and running balance are the book seed times the fraction. Running balance is start plus realized P&L through that fill.`
-  );
+  const captionText = `${labelFor(sleeve)} fills. Trade P&L, running P&L, and running balance are the book seed times the fraction. Running balance is start plus realized P&L through that fill.`;
+  const caption = el("caption", "sr-only", `${labelFor(sleeve)} fills`);
+  const note = el("p", "tape-note", captionText);
+  note.id = `tape-note-${sleeve}`;
+  table.setAttribute("aria-describedby", note.id);
   const thead = el("thead");
   const headRow = el("tr");
-  for (const label of ["Time", "Ticker", "Side", "Notional", "Trade P&L", "Running P&L", "Running balance (book)", "Why"]) {
-    headRow.append(el("th", null, label));
+  for (const label of ["Time", "Ticker", "Side", "Notional", "Trade P&L", "Running P&L", "Running balance", "Why"]) {
+    const th = el("th", null, label);
+    th.scope = "col";
+    headRow.append(th);
   }
   thead.append(headRow);
   const tbody = el("tbody");
@@ -462,7 +462,7 @@ function renderTape(sleeve, trades) {
   }
   table.append(caption, thead, tbody);
   wrap.append(table);
-  panel.append(wrap);
+  panel.append(wrap, note);
   section.append(panel);
   return section;
 }
