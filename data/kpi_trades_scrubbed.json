@@ -1089,6 +1089,39 @@
     "running_balance_frac": 1.093861
   },
   {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T15:59:32.248824+00:00",
+    "ticker": "HBAR",
+    "side": "sell",
+    "notional_frac_of_book": 0.039167,
+    "pnl_frac_of_book": 0.006137,
+    "why": "profit-exit +5% reanalyze half-scale on NEW lot (+8.03% vs 0.116518; no profit_exits model; short-hold; artifact still buy)",
+    "running_pnl_frac": 0.099998,
+    "running_balance_frac": 1.099998
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T15:59:32.676659+00:00",
+    "ticker": "NEAR",
+    "side": "sell",
+    "notional_frac_of_book": 0.080667,
+    "pnl_frac_of_book": -0.0096,
+    "why": "artifact sell (24h -5.32% vol z=1.57 conv 0.735)",
+    "running_pnl_frac": 0.090398,
+    "running_balance_frac": 1.090398
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T16:00:05.462778+00:00",
+    "ticker": "ALGO",
+    "side": "buy",
+    "notional_frac_of_book": 0.056633,
+    "pnl_frac_of_book": 0.0,
+    "why": "artifact buy $17 rails-capped (artifact size_usd 4.64 compressed by model kill_rem 5.2; realized kill_rem ~17.70) conv 0.893 (+14.31% 24h vol z=1.04)",
+    "running_pnl_frac": 0.090398,
+    "running_balance_frac": 1.090398
+  },
+  {
     "sleeve": "equities",
     "timestamp_et": "2026-09-25T19:37:00+00:00",
     "ticker": "QCOM",
