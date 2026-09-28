@@ -902,6 +902,17 @@
     "running_balance_frac": 1.090322
   },
   {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T08:47:57.788574+00:00",
+    "ticker": "HBAR",
+    "side": "sell",
+    "notional_frac_of_book": 0.075833,
+    "pnl_frac_of_book": 0.008024,
+    "why": "RH Agentic sync order 6aba29bd-3529-4784-92d6-24145a1ef47c",
+    "running_pnl_frac": 0.098346,
+    "running_balance_frac": 1.098346
+  },
+  {
     "sleeve": "equities",
     "timestamp_et": "2026-09-25T19:37:00+00:00",
     "ticker": "QCOM",
