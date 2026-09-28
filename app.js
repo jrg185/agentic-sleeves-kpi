@@ -53,6 +53,16 @@ function renderStatus(meta) {
   if (when) statusEl.append(el("p", "status-copy", String(when)));
 }
 
+function splitPnl(label, dollars, frac, fine) {
+  const node = metric(label, "", tone(dollars));
+  const value = node.querySelector(".v");
+  value.replaceChildren(
+    pair(formatUsd(dollars, { signed: true }), formatPct(frac, { signed: true, digits: 2 }))
+  );
+  node.append(el("p", "fine", fine));
+  return node;
+}
+
 function renderSleeve(derived, { hero = false } = {}) {
   const card = el("article", `sleeve ${derived.sleeve}${hero ? " hero" : ""}`);
   const head = el("header", "sleeve-head");
@@ -66,19 +76,13 @@ function renderSleeve(derived, { hero = false } = {}) {
     formatUsd(derived.runningBalance),
     tone(derived.runningBalance)
   );
-  balance.append(el("p", "fine", "Book = cash + MTM (interim: start + P&L)."));
+  balance.append(el("p", "fine", "book = start + realized + unrealized"));
   grid.append(
-    metric("Start", formatUsd(derived.seed)),
+    splitPnl("Realized P&L", derived.realizedPnl, derived.realizedPnlFrac, "closed exits"),
+    splitPnl("Unrealized P&L", derived.unrealizedPnl, derived.unrealizedPnlFrac, "open MTM"),
     balance,
-    metric(
-      "P&L",
-      "",
-      tone(derived.runningPnl)
-    )
+    metric("Start", formatUsd(derived.seed))
   );
-  const pnl = grid.lastChild.querySelector(".v");
-  pnl.replaceChildren(pair(formatUsd(derived.runningPnl, { signed: true }), formatPct(derived.runningPnlFrac, { signed: true })));
-  pnl.classList.add(tone(derived.runningPnl));
 
   grid.append(metric("Day P&L", formatUsd(derived.dayPnl, { signed: true }), tone(derived.dayPnl)));
 

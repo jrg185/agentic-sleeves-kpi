@@ -79,6 +79,19 @@ export function deriveSleeve(row, seeds = SEEDS_USD) {
     seed,
     { percentPoints: true }
   );
+  // Named _frac fields stay fractions even above 1. Cards label these apart from running P&L.
+  const realizedPnlFrac = fractionFrom(
+    row,
+    ["realized_pnl_frac"],
+    ["realized_pnl_usd", "realized_pnl"],
+    seed
+  );
+  const unrealizedPnlFrac = fractionFrom(
+    row,
+    ["unrealized_pnl_frac"],
+    ["unrealized_pnl_usd", "unrealized_pnl"],
+    seed
+  );
   const dayPnlFrac = fractionFrom(
     row,
     ["day_pnl_frac", "day_pnl_pct"],
@@ -116,12 +129,16 @@ export function deriveSleeve(row, seeds = SEEDS_USD) {
     seed,
     runningBalanceFrac,
     runningPnlFrac,
+    realizedPnlFrac,
+    unrealizedPnlFrac,
     dayPnlFrac,
     dayKillFrac,
     killHeadroomFrac,
     dayTargetFrac,
     runningBalance: money(seed, runningBalanceFrac),
     runningPnl: money(seed, runningPnlFrac),
+    realizedPnl: money(seed, realizedPnlFrac),
+    unrealizedPnl: money(seed, unrealizedPnlFrac),
     dayPnl: money(seed, dayPnlFrac),
     dayKill: money(seed, dayKillFrac),
     killHeadroom: money(seed, killHeadroomFrac),

@@ -1,0 +1,45 @@
+name: Export KPI
+
+# Reads SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY only.
+# Does not read ALPHA_VANTAGE_API_KEY or FINNHUB_API_KEY.
+# An empty service role secret leaves the committed data/*.json in place.
+# data/** pushes are ignored so the export commit does not run this job again.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "data/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sleeves-kpi-export
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Export scrubbed Supabase views
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python3 scripts/export_kpi.py
+
+      - name: Commit refreshed JSON
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- data/kpi_summary.json data/kpi_trades_scrubbed.json data/models_oos.json data/meta.json
+          if git diff --cached --quiet; then
+            echo "KPI JSON unchanged."
+          else
+            git commit -m "Export scrubbed KPI views to data JSON"
+            git push
+          fi
