@@ -913,6 +913,28 @@
     "running_balance_frac": 1.098346
   },
   {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T09:53:21.38483+00:00",
+    "ticker": "ALGO",
+    "side": "buy",
+    "notional_frac_of_book": 0.085,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6aba3911-e796-48f6-8e48-88ae7769fa35",
+    "running_pnl_frac": 0.098346,
+    "running_balance_frac": 1.098346
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T09:53:22.136173+00:00",
+    "ticker": "QNT",
+    "side": "buy",
+    "notional_frac_of_book": 0.085633,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6aba3912-441d-4852-b476-860c090bf350",
+    "running_pnl_frac": 0.098346,
+    "running_balance_frac": 1.098346
+  },
+  {
     "sleeve": "equities",
     "timestamp_et": "2026-09-25T19:37:00+00:00",
     "ticker": "QCOM",
