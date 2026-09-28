@@ -182,12 +182,12 @@ export function formatPct(frac, { signed = false, digits = 1 } = {}) {
   return body;
 }
 
+// Width of the kill-headroom meter, as a percent of the track.
+// Matches the stated headroom fraction of book (the percent on the card).
+// Not rescaled by the day-kill rail, and not inverted into kill already used.
 export function headroomFill(derived) {
-  if (derived.killHeadroomFrac == null || derived.dayKillFrac == null || derived.dayKillFrac === 0) {
-    return null;
-  }
-  const ratio = derived.killHeadroomFrac / Math.abs(derived.dayKillFrac);
-  return Math.max(0, Math.min(100, ratio * 100));
+  if (derived.killHeadroomFrac == null || Number.isNaN(derived.killHeadroomFrac)) return null;
+  return Math.max(0, Math.min(100, derived.killHeadroomFrac * 100));
 }
 
 export function tone(value) {

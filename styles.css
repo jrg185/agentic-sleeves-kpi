@@ -252,9 +252,12 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
 .tapes-head p { margin: 0; }
 
 .tapes {
+  /* One column. The board is capped at 1120px, and each tape needs that
+     full width before Running P&L / Running balance fit without a sideways scroll.
+     Two columns only belong on a container wide enough for both tables. */
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 20px;
   min-width: 0;
   padding-bottom: 28px;
 }
@@ -267,8 +270,10 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
   justify-content: space-between;
   gap: 8px 12px;
   margin-bottom: 8px;
+  min-height: 44px;
 }
-.tape h3 { margin: 0; font-size: 1.5rem; }
+.tape h3 { margin: 0; font-size: 1.5rem; min-width: 0; }
+.tape-head .tape-export { margin-left: auto; }
 .tape-toggle {
   appearance: none;
   background: none;
@@ -327,9 +332,28 @@ td.why a:focus-visible {
   background: var(--bg-2);
 }
 
+.tape-note {
+  margin: 8px 2px 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  overflow-wrap: break-word;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 table {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
   border-collapse: collapse;
   font-size: 0.86rem;
 }
@@ -345,6 +369,7 @@ th, td {
   text-align: left;
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
+  vertical-align: top;
 }
 
 th {
@@ -357,9 +382,9 @@ th {
 
 td.why {
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  min-width: 10rem;
+  overflow-wrap: break-word;
+  word-break: normal;
+  min-width: 8rem;
   max-width: min(28rem, 70vw);
   color: var(--muted);
 }
@@ -435,11 +460,62 @@ footer .repo-links { margin-top: 12px; }
 
 code { color: var(--ink); }
 
+@media (min-width: 800px) {
+  .tape table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  .tape th,
+  .tape td {
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+  .tape td.num {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+  .tape td.why {
+    min-width: 0;
+    max-width: none;
+    width: auto;
+    white-space: pre-wrap;
+  }
+  /* Same tracks on every sleeve so headers and CSV columns line up. */
+  .tape th:nth-child(1) { width: 16%; }
+  .tape th:nth-child(2) { width: 8%; }
+  .tape th:nth-child(3) { width: 8%; }
+  .tape th:nth-child(4) { width: 17%; }
+  .tape th:nth-child(5) { width: 11%; }
+  .tape th:nth-child(6) { width: 12%; }
+  .tape th:nth-child(7) { width: 16%; }
+  .tape th:nth-child(8) { width: 12%; }
+}
+
 @media (max-width: 860px) {
   .top, .sleeve-grid, .tapes, .metrics, .model-grid, .model-card dl { grid-template-columns: 1fr; }
   .top { padding-top: 28px; }
   .metric .v, .pair .primary { font-size: 1.2rem; }
   .sleeve-head time { text-align: left; }
+}
+
+@media (max-width: 799px) {
+  .tape table {
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+  }
+  .tape th,
+  .tape td {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+  .tape td.why {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: normal;
+    min-width: 8rem;
+    max-width: min(28rem, 70vw);
+  }
 }
 
 @media (max-width: 420px) {
@@ -455,7 +531,8 @@ code { color: var(--ink); }
   .metric .v, .pair .primary { font-size: 1.15rem; }
   .metrics { gap: 12px; }
   .tape-head { align-items: stretch; }
-  .tape-export {
+  .tape-head .tape-export {
+    margin-left: 0;
     flex: 1 1 100%;
     display: inline-flex;
     justify-content: center;
