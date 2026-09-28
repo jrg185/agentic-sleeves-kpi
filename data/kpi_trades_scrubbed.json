@@ -1131,5 +1131,27 @@
     "why": "SWING unlock Joe/Wags; soft tgt flexible",
     "running_pnl_frac": 0.0,
     "running_balance_frac": 1.0
+  },
+  {
+    "sleeve": "equities",
+    "timestamp_et": "2026-09-28T17:08:07+00:00",
+    "ticker": "PBR",
+    "side": "buy",
+    "notional_frac_of_book": 0.2,
+    "pnl_frac_of_book": 0.0,
+    "why": "SWING desk run Joe; energy RS oil/Hormuz",
+    "running_pnl_frac": 0.0,
+    "running_balance_frac": 1.0
+  },
+  {
+    "sleeve": "equities",
+    "timestamp_et": "2026-09-28T17:10:41+00:00",
+    "ticker": "QCOM",
+    "side": "sell",
+    "notional_frac_of_book": 0.28118,
+    "pnl_frac_of_book": -0.01882,
+    "why": "EXIT inv broke ~194.50-195; desk cut",
+    "running_pnl_frac": -0.01882,
+    "running_balance_frac": 0.98118
   }
 ]

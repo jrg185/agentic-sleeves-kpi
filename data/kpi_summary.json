@@ -1,38 +1,38 @@
 [
   {
-    "as_of": "2026-09-28T16:53:14+00:00",
+    "as_of": "2026-09-28T17:14:20+00:00",
     "sleeve": "combined",
     "day_kill_pct": null,
     "day_target_pct": null,
-    "realized_pnl_frac": 0.0339,
-    "unrealized_pnl_frac": -0.026795,
+    "realized_pnl_frac": 0.022138,
+    "unrealized_pnl_frac": -0.008604,
     "kill_headroom_frac": null,
-    "running_balance_frac": 1.007105,
-    "running_pnl_frac": 0.007105,
-    "note": "crypto+equities; realized $27.12; unrealized -$21.44; book=start+realized+unrealized"
+    "running_balance_frac": 1.013533,
+    "running_pnl_frac": 0.013533,
+    "note": "crypto+equities; realized $17.71; unrealized -$6.88; book=start+realized+unrealized"
   },
   {
-    "as_of": "2026-09-28T16:53:14+00:00",
+    "as_of": "2026-09-28T17:14:20+00:00",
     "sleeve": "crypto",
     "day_kill_pct": -0.1,
     "day_target_pct": 0.025,
     "realized_pnl_frac": 0.0904,
-    "unrealized_pnl_frac": -0.041128,
-    "kill_headroom_frac": 1.492718,
-    "running_balance_frac": 1.049272,
-    "running_pnl_frac": 0.049272,
-    "note": "realized $27.12 closed exits; unrealized -$12.34 open MTM; book=start+realized+unrealized"
+    "unrealized_pnl_frac": -0.021189,
+    "kill_headroom_frac": 1.692112,
+    "running_balance_frac": 1.069211,
+    "running_pnl_frac": 0.069211,
+    "note": "realized $27.12 closed exits; unrealized -$6.36 open MTM; book=start+realized+unrealized"
   },
   {
-    "as_of": "2026-09-28T16:53:14+00:00",
+    "as_of": "2026-09-28T17:14:20+00:00",
     "sleeve": "equities",
     "day_kill_pct": -0.25,
     "day_target_pct": null,
-    "realized_pnl_frac": 0.0,
-    "unrealized_pnl_frac": -0.018195,
-    "kill_headroom_frac": 0.92722,
-    "running_balance_frac": 0.981805,
-    "running_pnl_frac": -0.018195,
-    "note": "realized $0.00 closed exits; unrealized -$9.10 open MTM; book=start+realized+unrealized"
+    "realized_pnl_frac": -0.01882,
+    "unrealized_pnl_frac": -0.001053,
+    "kill_headroom_frac": 0.920507,
+    "running_balance_frac": 0.980127,
+    "running_pnl_frac": -0.019873,
+    "note": "realized -$9.41 closed exits; unrealized -$0.53 open MTM; book=start+realized+unrealized"
   }
 ]
