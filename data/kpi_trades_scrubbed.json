@@ -12,6 +12,17 @@
   },
   {
     "sleeve": "crypto",
+    "timestamp_et": "2026-09-26T16:36:50.714048+00:00",
+    "ticker": "AVAX",
+    "side": "buy",
+    "notional_frac_of_book": 0.082733,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab7f4a2-5444-4593-84ea-e78f57dc0cf6",
+    "running_pnl_frac": 0.0,
+    "running_balance_frac": 1.0
+  },
+  {
+    "sleeve": "crypto",
     "timestamp_et": "2026-09-26T18:22:05+00:00",
     "ticker": "AVAX",
     "side": "sell",
@@ -23,14 +34,36 @@
   },
   {
     "sleeve": "crypto",
+    "timestamp_et": "2026-09-26T18:22:05.677327+00:00",
+    "ticker": "AVAX",
+    "side": "sell",
+    "notional_frac_of_book": 0.081667,
+    "pnl_frac_of_book": -0.001043,
+    "why": "RH Agentic sync order 6ab80d4d-9abc-4c12-aeb6-0b50c9728b1b",
+    "running_pnl_frac": -0.002876,
+    "running_balance_frac": 0.997124
+  },
+  {
+    "sleeve": "crypto",
     "timestamp_et": "2026-09-26T20:48:07+00:00",
     "ticker": "QNT",
     "side": "buy",
     "notional_frac_of_book": 0.082967,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.001833,
-    "running_balance_frac": 0.998167
+    "running_pnl_frac": -0.002876,
+    "running_balance_frac": 0.997124
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-26T20:48:07.153603+00:00",
+    "ticker": "QNT",
+    "side": "buy",
+    "notional_frac_of_book": 0.082967,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab82f87-8b24-43ab-bd35-dc0099973cf4",
+    "running_pnl_frac": -0.002876,
+    "running_balance_frac": 0.997124
   },
   {
     "sleeve": "crypto",
@@ -40,8 +73,19 @@
     "notional_frac_of_book": 0.082967,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.001833,
-    "running_balance_frac": 0.998167
+    "running_pnl_frac": -0.002876,
+    "running_balance_frac": 0.997124
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-26T20:48:37.025431+00:00",
+    "ticker": "QNT",
+    "side": "buy",
+    "notional_frac_of_book": 0.082967,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab82fa5-063c-4170-81fe-063f93004a78",
+    "running_pnl_frac": -0.002876,
+    "running_balance_frac": 0.997124
   },
   {
     "sleeve": "crypto",
@@ -51,8 +95,19 @@
     "notional_frac_of_book": 0.082933,
     "pnl_frac_of_book": -0.000833,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.002666,
-    "running_balance_frac": 0.997334
+    "running_pnl_frac": -0.003709,
+    "running_balance_frac": 0.996291
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-26T20:49:44.595697+00:00",
+    "ticker": "QNT",
+    "side": "sell",
+    "notional_frac_of_book": 0.082933,
+    "pnl_frac_of_book": -8.1e-05,
+    "why": "RH Agentic sync order 6ab82fe8-9ea7-4b36-bda5-7e0f2bcb650d",
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
   },
   {
     "sleeve": "crypto",
@@ -62,8 +117,19 @@
     "notional_frac_of_book": 0.091567,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.002666,
-    "running_balance_frac": 0.997334
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-26T21:50:54.214001+00:00",
+    "ticker": "ZEC",
+    "side": "buy",
+    "notional_frac_of_book": 0.091567,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab83e3e-35fa-43b3-a7cc-00d9e7baf29f",
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
   },
   {
     "sleeve": "crypto",
@@ -73,8 +139,19 @@
     "notional_frac_of_book": 0.0905,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.002666,
-    "running_balance_frac": 0.997334
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-26T21:51:01.395588+00:00",
+    "ticker": "XCN",
+    "side": "buy",
+    "notional_frac_of_book": 0.0905,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab83e45-706f-483e-b3b3-d79166eec43a",
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
   },
   {
     "sleeve": "crypto",
@@ -84,8 +161,19 @@
     "notional_frac_of_book": 0.084633,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.002666,
-    "running_balance_frac": 0.997334
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-26T23:56:32.314485+00:00",
+    "ticker": "W",
+    "side": "buy",
+    "notional_frac_of_book": 0.084633,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab85bb0-3c0b-42d9-b507-2a9afe336520",
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
   },
   {
     "sleeve": "crypto",
@@ -95,8 +183,19 @@
     "notional_frac_of_book": 0.098867,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.002666,
-    "running_balance_frac": 0.997334
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T00:51:37.35254+00:00",
+    "ticker": "PYTH",
+    "side": "buy",
+    "notional_frac_of_book": 0.098867,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab86899-7f69-4276-a23c-1ce2eeb4529a",
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
   },
   {
     "sleeve": "crypto",
@@ -106,8 +205,19 @@
     "notional_frac_of_book": 0.0615,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.002666,
-    "running_balance_frac": 0.997334
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T03:47:37.976025+00:00",
+    "ticker": "COMP",
+    "side": "buy",
+    "notional_frac_of_book": 0.0615,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab891d9-3bc4-4147-a4ca-590880cd4235",
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
   },
   {
     "sleeve": "crypto",
@@ -117,8 +227,8 @@
     "notional_frac_of_book": 0.0189,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.002666,
-    "running_balance_frac": 0.997334
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
   },
   {
     "sleeve": "crypto",
@@ -128,8 +238,30 @@
     "notional_frac_of_book": 0.0092,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.002666,
-    "running_balance_frac": 0.997334
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T04:53:08.442217+00:00",
+    "ticker": "COMP",
+    "side": "buy",
+    "notional_frac_of_book": 0.0189,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab8a134-0407-4765-bde6-765a54c745b5",
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T04:53:08.887505+00:00",
+    "ticker": "W",
+    "side": "buy",
+    "notional_frac_of_book": 0.0092,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab8a134-5ca4-4573-a8cc-395dc0800435",
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
   },
   {
     "sleeve": "crypto",
@@ -139,8 +271,19 @@
     "notional_frac_of_book": 0.059267,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.002666,
-    "running_balance_frac": 0.997334
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T06:54:08.911677+00:00",
+    "ticker": "DOT",
+    "side": "buy",
+    "notional_frac_of_book": 0.059267,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab8bd90-1fb9-4171-95eb-ee588c711ef0",
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
   },
   {
     "sleeve": "crypto",
@@ -150,8 +293,19 @@
     "notional_frac_of_book": 0.064367,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.002666,
-    "running_balance_frac": 0.997334
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T06:54:09.749656+00:00",
+    "ticker": "UNI",
+    "side": "buy",
+    "notional_frac_of_book": 0.064367,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab8bd91-b36f-498b-885c-0c8b60c5cef1",
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
   },
   {
     "sleeve": "crypto",
@@ -161,8 +315,19 @@
     "notional_frac_of_book": 0.074433,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.002666,
-    "running_balance_frac": 0.997334
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T07:50:18.526927+00:00",
+    "ticker": "AVAX",
+    "side": "buy",
+    "notional_frac_of_book": 0.074433,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab8caba-2c39-4da1-ba28-ac8c86cb7630",
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
   },
   {
     "sleeve": "crypto",
@@ -172,8 +337,8 @@
     "notional_frac_of_book": 0.0634,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.002666,
-    "running_balance_frac": 0.997334
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
   },
   {
     "sleeve": "crypto",
@@ -183,8 +348,30 @@
     "notional_frac_of_book": 0.070667,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.002666,
-    "running_balance_frac": 0.997334
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T07:50:19.055161+00:00",
+    "ticker": "ORCA",
+    "side": "buy",
+    "notional_frac_of_book": 0.0634,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab8cabb-6256-43fb-9c31-4a9be1c2fb04",
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T07:50:19.735193+00:00",
+    "ticker": "VVV",
+    "side": "buy",
+    "notional_frac_of_book": 0.070667,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab8cabb-5346-45a1-bb70-59d4df659c8b",
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
   },
   {
     "sleeve": "crypto",
@@ -194,8 +381,19 @@
     "notional_frac_of_book": 0.066133,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.002666,
-    "running_balance_frac": 0.997334
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T09:53:11.882688+00:00",
+    "ticker": "RENDER",
+    "side": "buy",
+    "notional_frac_of_book": 0.066133,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab8e787-c66a-42ab-bb42-0ef6d9904873",
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
   },
   {
     "sleeve": "crypto",
@@ -205,8 +403,19 @@
     "notional_frac_of_book": 0.0241,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": -0.002666,
-    "running_balance_frac": 0.997334
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T10:53:12.971224+00:00",
+    "ticker": "ORCA",
+    "side": "buy",
+    "notional_frac_of_book": 0.0241,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab8f598-75c9-4dd6-a59f-6ee73c62d2eb",
+    "running_pnl_frac": -0.00379,
+    "running_balance_frac": 0.99621
   },
   {
     "sleeve": "crypto",
@@ -216,8 +425,19 @@
     "notional_frac_of_book": 0.055267,
     "pnl_frac_of_book": 0.01325,
     "why": "+15% scale",
-    "running_pnl_frac": 0.010584,
-    "running_balance_frac": 1.010584
+    "running_pnl_frac": 0.00946,
+    "running_balance_frac": 1.00946
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T13:58:25.819052+00:00",
+    "ticker": "QNT",
+    "side": "sell",
+    "notional_frac_of_book": 0.055267,
+    "pnl_frac_of_book": 0.013842,
+    "why": "RH Agentic sync order 6ab92101-90e6-4484-98b0-bb8bc4e740dd",
+    "running_pnl_frac": 0.023302,
+    "running_balance_frac": 1.023302
   },
   {
     "sleeve": "crypto",
@@ -227,8 +447,19 @@
     "notional_frac_of_book": 0.054233,
     "pnl_frac_of_book": 0.007694,
     "why": "+15% scale",
-    "running_pnl_frac": 0.018278,
-    "running_balance_frac": 1.018278
+    "running_pnl_frac": 0.030996,
+    "running_balance_frac": 1.030996
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T16:50:05.436033+00:00",
+    "ticker": "W",
+    "side": "sell",
+    "notional_frac_of_book": 0.054233,
+    "pnl_frac_of_book": 0.007362,
+    "why": "RH Agentic sync order 6ab9493d-e1d5-4624-bb31-12b72fcc3a72",
+    "running_pnl_frac": 0.038358,
+    "running_balance_frac": 1.038358
   },
   {
     "sleeve": "crypto",
@@ -238,8 +469,19 @@
     "notional_frac_of_book": 0.089767,
     "pnl_frac_of_book": 0.0,
     "why": "artifact buy",
-    "running_pnl_frac": 0.018278,
-    "running_balance_frac": 1.018278
+    "running_pnl_frac": 0.038358,
+    "running_balance_frac": 1.038358
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T18:55:20.403729+00:00",
+    "ticker": "GRT",
+    "side": "buy",
+    "notional_frac_of_book": 0.089767,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab96698-524f-44ad-afe6-ebd45e42558d",
+    "running_pnl_frac": 0.038358,
+    "running_balance_frac": 1.038358
   },
   {
     "sleeve": "crypto",
@@ -249,8 +491,8 @@
     "notional_frac_of_book": 0.051533,
     "pnl_frac_of_book": 0.00615,
     "why": "+15% scale",
-    "running_pnl_frac": 0.024428,
-    "running_balance_frac": 1.024428
+    "running_pnl_frac": 0.044508,
+    "running_balance_frac": 1.044508
   },
   {
     "sleeve": "crypto",
@@ -260,8 +502,30 @@
     "notional_frac_of_book": 0.089367,
     "pnl_frac_of_book": 0.001033,
     "why": "rotation small gainer",
-    "running_pnl_frac": 0.025461,
-    "running_balance_frac": 1.025461
+    "running_pnl_frac": 0.045541,
+    "running_balance_frac": 1.045541
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T21:56:12.359201+00:00",
+    "ticker": "GRT",
+    "side": "sell",
+    "notional_frac_of_book": 0.051533,
+    "pnl_frac_of_book": 0.006676,
+    "why": "RH Agentic sync order 6ab990fc-905a-4cc9-ba68-26081082dba0",
+    "running_pnl_frac": 0.052217,
+    "running_balance_frac": 1.052217
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T21:56:12.865606+00:00",
+    "ticker": "ORCA",
+    "side": "sell",
+    "notional_frac_of_book": 0.089367,
+    "pnl_frac_of_book": 0.001917,
+    "why": "RH Agentic sync order 6ab990fc-b293-49c1-b86c-9d22ebb3d30a",
+    "running_pnl_frac": 0.054134,
+    "running_balance_frac": 1.054134
   },
   {
     "sleeve": "crypto",
@@ -271,8 +535,8 @@
     "notional_frac_of_book": 0.0898,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": 0.025461,
-    "running_balance_frac": 1.025461
+    "running_pnl_frac": 0.054134,
+    "running_balance_frac": 1.054134
   },
   {
     "sleeve": "crypto",
@@ -282,8 +546,30 @@
     "notional_frac_of_book": 0.0903,
     "pnl_frac_of_book": 0.0,
     "why": "backfill from RH",
-    "running_pnl_frac": 0.025461,
-    "running_balance_frac": 1.025461
+    "running_pnl_frac": 0.054134,
+    "running_balance_frac": 1.054134
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T21:56:25.045185+00:00",
+    "ticker": "NEAR",
+    "side": "buy",
+    "notional_frac_of_book": 0.0903,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab99109-2d9d-47f3-b488-218c0d0766b6",
+    "running_pnl_frac": 0.054134,
+    "running_balance_frac": 1.054134
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T21:56:25.392601+00:00",
+    "ticker": "IMX",
+    "side": "buy",
+    "notional_frac_of_book": 0.0898,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab99109-2356-4c85-9c1b-fcf9e6381fdc",
+    "running_pnl_frac": 0.054134,
+    "running_balance_frac": 1.054134
   },
   {
     "sleeve": "crypto",
@@ -293,8 +579,19 @@
     "notional_frac_of_book": 0.066633,
     "pnl_frac_of_book": -0.004667,
     "why": "artifact sell exit (24h -2.20% vol z=1.47 conv 0.63)",
-    "running_pnl_frac": 0.020794,
-    "running_balance_frac": 1.020794
+    "running_pnl_frac": 0.049467,
+    "running_balance_frac": 1.049467
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T22:53:11.978205+00:00",
+    "ticker": "VVV",
+    "side": "sell",
+    "notional_frac_of_book": 0.066633,
+    "pnl_frac_of_book": -0.003995,
+    "why": "RH Agentic sync order 6ab99e57-6f1d-4c57-88b6-4f9ceee7d30a",
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
   },
   {
     "sleeve": "crypto",
@@ -304,8 +601,8 @@
     "notional_frac_of_book": 0.074567,
     "pnl_frac_of_book": 0.0,
     "why": "artifact buy $22.59 conv 0.75 (+2.10% 24h vol z=5.96)",
-    "running_pnl_frac": 0.020794,
-    "running_balance_frac": 1.020794
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
   },
   {
     "sleeve": "crypto",
@@ -315,8 +612,30 @@
     "notional_frac_of_book": 0.091233,
     "pnl_frac_of_book": 0.0,
     "why": "artifact buy $27.64 conv 0.92 (+7.73% 24h vol z=2.99)",
-    "running_pnl_frac": 0.020794,
-    "running_balance_frac": 1.020794
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T22:53:18.169578+00:00",
+    "ticker": "SEI",
+    "side": "buy",
+    "notional_frac_of_book": 0.091233,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab99e5e-f7fd-4e03-8a53-aebedee55cc0",
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T22:53:18.897472+00:00",
+    "ticker": "CRV",
+    "side": "buy",
+    "notional_frac_of_book": 0.074567,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab99e5e-80a6-4ece-9b9c-a754cb82ec84",
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
   },
   {
     "sleeve": "crypto",
@@ -326,8 +645,19 @@
     "notional_frac_of_book": 0.073533,
     "pnl_frac_of_book": 0.0,
     "why": "artifact buy $22.27 conv 0.74 (+8.28% 24h vol z=0.55)",
-    "running_pnl_frac": 0.020794,
-    "running_balance_frac": 1.020794
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-27T22:53:21.006018+00:00",
+    "ticker": "SUI",
+    "side": "buy",
+    "notional_frac_of_book": 0.073533,
+    "pnl_frac_of_book": 0.0,
+    "why": "RH Agentic sync order 6ab99e60-415f-4d3d-9531-9dad1a2fc266",
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
   },
   {
     "sleeve": "crypto",
@@ -337,8 +667,8 @@
     "notional_frac_of_book": 0.043033,
     "pnl_frac_of_book": 0.0,
     "why": "artifact buy top-up to $26.50 (held leftover after prior +15% scale); conv 0.88; +28.66% 24h vol z=0.92",
-    "running_pnl_frac": 0.020794,
-    "running_balance_frac": 1.020794
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
   },
   {
     "sleeve": "crypto",
@@ -348,8 +678,8 @@
     "notional_frac_of_book": 0.078233,
     "pnl_frac_of_book": 0.0,
     "why": "artifact buy $23.69 conv 0.79 (+3.32% 24h vol z=4.21)",
-    "running_pnl_frac": 0.020794,
-    "running_balance_frac": 1.020794
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
   },
   {
     "sleeve": "crypto",
@@ -359,8 +689,8 @@
     "notional_frac_of_book": 0.063233,
     "pnl_frac_of_book": 0.0,
     "why": "artifact buy $19.15 conv 0.64 (+2.76% 24h vol z=1.32)",
-    "running_pnl_frac": 0.020794,
-    "running_balance_frac": 1.020794
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
   },
   {
     "sleeve": "crypto",
@@ -370,8 +700,8 @@
     "notional_frac_of_book": 0.0586,
     "pnl_frac_of_book": 0.0,
     "why": "artifact buy $17.75 conv 0.59 (+2.91% 24h vol z=0.68)",
-    "running_pnl_frac": 0.020794,
-    "running_balance_frac": 1.020794
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
   },
   {
     "sleeve": "crypto",
@@ -381,8 +711,8 @@
     "notional_frac_of_book": 0.058033,
     "pnl_frac_of_book": 0.0,
     "why": "artifact buy $17.58 conv 0.59 (+2.30% 24h vol z=0.84)",
-    "running_pnl_frac": 0.020794,
-    "running_balance_frac": 1.020794
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
   },
   {
     "sleeve": "crypto",
@@ -392,8 +722,8 @@
     "notional_frac_of_book": 0.012,
     "pnl_frac_of_book": 0.0,
     "why": "artifact buy top-up to $30; conv 1.0; +29.33% 24h vol z=2.44",
-    "running_pnl_frac": 0.020794,
-    "running_balance_frac": 1.020794
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
   },
   {
     "sleeve": "crypto",
@@ -403,8 +733,8 @@
     "notional_frac_of_book": 0.010167,
     "pnl_frac_of_book": 0.0,
     "why": "artifact buy top-up to $30; conv 1.0; +13.57% 24h vol z=2.61",
-    "running_pnl_frac": 0.020794,
-    "running_balance_frac": 1.020794
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
   },
   {
     "sleeve": "crypto",
@@ -414,8 +744,8 @@
     "notional_frac_of_book": 0.008667,
     "pnl_frac_of_book": 0.0,
     "why": "artifact buy top-up to $30; conv 1.0; +13.84% 24h vol z=4.77",
-    "running_pnl_frac": 0.020794,
-    "running_balance_frac": 1.020794
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
   },
   {
     "sleeve": "crypto",
@@ -425,8 +755,8 @@
     "notional_frac_of_book": 0.0105,
     "pnl_frac_of_book": 0.0,
     "why": "artifact buy top-up to $25.24; conv 0.84; +9.22% 24h vol z=1.43",
-    "running_pnl_frac": 0.020794,
-    "running_balance_frac": 1.020794
+    "running_pnl_frac": 0.045472,
+    "running_balance_frac": 1.045472
   },
   {
     "sleeve": "crypto",
@@ -436,8 +766,8 @@
     "notional_frac_of_book": 0.0886,
     "pnl_frac_of_book": 0.046283,
     "why": "Joe exit \u2014 missed peak / downside",
-    "running_pnl_frac": 0.067077,
-    "running_balance_frac": 1.067077
+    "running_pnl_frac": 0.091755,
+    "running_balance_frac": 1.091755
   },
   {
     "sleeve": "crypto",
@@ -447,8 +777,8 @@
     "notional_frac_of_book": 0.053167,
     "pnl_frac_of_book": 0.005873,
     "why": "profit-exit model: trail through; leftover full exit",
-    "running_pnl_frac": 0.07295,
-    "running_balance_frac": 1.07295
+    "running_pnl_frac": 0.097628,
+    "running_balance_frac": 1.097628
   },
   {
     "sleeve": "crypto",
@@ -458,8 +788,8 @@
     "notional_frac_of_book": 0.0544,
     "pnl_frac_of_book": 0.00395,
     "why": "profit-exit +5% reanalyze half-scale",
-    "running_pnl_frac": 0.0769,
-    "running_balance_frac": 1.0769
+    "running_pnl_frac": 0.101578,
+    "running_balance_frac": 1.101578
   },
   {
     "sleeve": "crypto",
@@ -469,8 +799,8 @@
     "notional_frac_of_book": 0.051733,
     "pnl_frac_of_book": 0.00175,
     "why": "profit-exit +5% reanalyze half-scale (gate)",
-    "running_pnl_frac": 0.07865,
-    "running_balance_frac": 1.07865
+    "running_pnl_frac": 0.103328,
+    "running_balance_frac": 1.103328
   },
   {
     "sleeve": "crypto",
@@ -480,8 +810,19 @@
     "notional_frac_of_book": 0.1039,
     "pnl_frac_of_book": 0.003049,
     "why": "profit-exit trail breach (bc-b76ce034 / PR#50); full exit not half",
-    "running_pnl_frac": 0.081699,
-    "running_balance_frac": 1.081699
+    "running_pnl_frac": 0.106377,
+    "running_balance_frac": 1.106377
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-28T03:50:13.562412+00:00",
+    "ticker": "CRV",
+    "side": "sell",
+    "notional_frac_of_book": 0.071533,
+    "pnl_frac_of_book": -0.003024,
+    "why": "RH Agentic sync order 6ab9e3f5-164e-4c80-b5ae-0c9efe6c53ab",
+    "running_pnl_frac": 0.103353,
+    "running_balance_frac": 1.103353
   },
   {
     "sleeve": "equities",
