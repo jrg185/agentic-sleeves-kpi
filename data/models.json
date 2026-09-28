@@ -1,36 +1,37 @@
 {
-  "as_of": "2026-09-28T00:09:08Z",
-  "status": "published",
-  "note": "Crypto T04 OOS is published. LightGBM's warehouse row is promoted on after-cost mean only. Logistic sleeve IR vs BTC is +0.235 and beats LightGBM at +0.111. That is not an IR promotion. The CLI stays --backend rules.",
+  "as_of": "2026-09-27T23:37:59Z",
+  "status": "equities_published",
+  "note": "Equities OOS is the purged walk-forward sleeve IR versus SPY. Crypto OOS is still pending.",
   "models": [
     {
       "sleeve": "crypto",
-      "name": "Crypto lgbm_v1",
-      "used": "Shadow scores only. python -m model.run stays --backend rules. --backend ml scores the joblib. This board does not place orders.",
-      "training": "Purged walk-forward, 8-hour horizon, 30 bp, from 2021-01-01. Warehouse model_runs status is promoted because pooled after-cost mean beat v0 rules and logistic. Logistic IR vs BTC (+0.235) beats LightGBM (+0.111), so this is not an IR promotion.",
-      "data_source": "Coinbase Exchange public hourly candles. 57 names, 2,240,863 bars. The fit uses 1,976,971 labeled rows.",
+      "name": "Crypto v0 heuristic",
+      "used": "Shadow advisory for the $300 crypto sleeve. Scores 24h return, volume z, and an ATR-ish range. It does not place orders.",
+      "training": "No fit. Buy when 24h return is above +2% and volume z is above 0.5. Sell when 24h return is below -2%.",
+      "data_source": "Coinbase Exchange public hourly candles, 168 bars. 57 Robinhood USD names that also have a Coinbase product.",
       "oos": {
-        "status": "published",
-        "window": "purged walk-forward, H=8h, 30bp, train from 2021-01-01",
-        "hit_rate": 0.5288,
-        "avg_return": 0.0028,
-        "n": 6831,
-        "note": "Full table is in data/models_oos.json. Logistic leads IR. LightGBM leads after-cost mean. CLI stays rules."
+        "status": "placeholder",
+        "window": null,
+        "hit_rate": null,
+        "avg_return": null,
+        "n": null,
+        "note": "Pending T04."
       }
     },
     {
       "sleeve": "equities",
-      "name": "Equities sleeve",
-      "used": "No fitted equities model is published as promoted on this board.",
-      "training": "Purged walk-forward versus SPY. Best IR is still negative.",
-      "data_source": "Equity research tape. This page has no broker feed.",
+      "name": "lgbm_equity_v1",
+      "used": "Research score for the $500 equity sleeve. The desk CLI stays on rules until place is unlocked. This page does not place orders.",
+      "training": "Purged walk-forward LightGBM, calibrated, versus logistic regression and HistGradientBoosting. Horizon 10 sessions, 30 bp round trip. Lagged DGS10, T10Y2Y, and HY OAS.",
+      "data_source": "yfinance then Stooq daily bars. FRED macros lagged one observation.",
       "oos": {
         "status": "published",
-        "window": "pre-FRED purged walk-forward, H=10d, 30bp",
+        "window": "2023-09-27..2026-09-11",
         "hit_rate": null,
-        "avg_return": null,
-        "n": null,
-        "note": "See models_oos.json. Not promoted."
+        "avg_return": 0.0084,
+        "n": 2254,
+        "sleeve_ir_vs_spy": 0.4207,
+        "note": "LightGBM after-cost sleeve IR vs SPY +0.4207. Promoted on this tab only."
       }
     }
   ]
