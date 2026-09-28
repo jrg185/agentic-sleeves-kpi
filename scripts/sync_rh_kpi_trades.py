@@ -10,20 +10,28 @@ There is no checked-in Robinhood client and no stored Robinhood login.
 Tonight's backfill was a one-shot Robinhood Trading MCP read plus a Supabase
 INSERT. Live fills still come from that MCP. This Action cannot call MCP.
 
+GitHub Actions secrets this client actually reads. There is no bearer token.
+Robinhood's Crypto Trading API signs each GET with an Ed25519 key.
+
+  RH_API_KEY                x-api-key. Required for the live Action path.
+  RH_BASE64_PRIVATE_KEY     Base64 Ed25519 private-key seed. Required. Never printed.
+  RH_AGENTIC_ACCOUNT        Agentic account number. Optional override.
+                            Default 546048042 when the secret is unset.
+
 Input, first match wins:
 
-  --from-json PATH          Filled orders. PATH - reads stdin.
-  RH_API_KEY and            Optional later REST path. Signs GET only against
-  RH_BASE64_PRIVATE_KEY     the documented Crypto Trading API. Never prints
-                            the key. RH_ACCOUNT_NUMBER selects v2 orders.
+  --from-json PATH          Filled orders. PATH - reads stdin. No RH secrets.
+  RH_API_KEY and            GET https://trading.robinhood.com/api/v2/crypto/trading/orders/
+  RH_BASE64_PRIVATE_KEY     for RH_AGENTIC_ACCOUNT. Does not place orders.
   RH_FILLS_PATH             JSON file of filled orders.
   data/rh_fills.json        Same, when that file is in the checkout.
 
 JSON may be a list, {"results": [...]}, or the MCP envelope
 {"data": {"results": [...]}}. Account numbers in the envelope are ignored.
 
-If none of those inputs exist, a live run exits 1 and stamps data/meta.json.
-It does not exit 0 and it does not invent a login.
+If the live Action path has neither a fills file nor RH_API_KEY and
+RH_BASE64_PRIVATE_KEY, the run exits 1 and stamps data/meta.json.
+It does not exit 0. Pull-request self-test does not need those secrets.
 
 Rows upsert on public.kpi_trades.order_id (see
 scripts/migrate_kpi_trades_order_id.sql). ON CONFLICT (order_id) DO NOTHING.
@@ -69,6 +77,7 @@ FEEDS_PATH = DATA / "rh_fills.json"
 MIGRATION_PATH = ROOT / "scripts" / "migrate_kpi_trades_order_id.sql"
 DEFAULT_URL = "https://bsnqwgbshwszbjncglqx.supabase.co"
 RH_BASE = "https://trading.robinhood.com"
+DEFAULT_AGENTIC_ACCOUNT = "546048042"
 BOOTSTRAP_CURSOR = "2026-09-01T00:00:00Z"
 OVERLAP = dt.timedelta(hours=6)
 DUST = Decimal("0.00000001")
@@ -111,10 +120,10 @@ DOC_PATH = "/api/v1/crypto/trading/orders/"
 DOC_SIGNATURE = "q/nEtxp/P2Or3hph3KejBqnw5o9qeuQ+hYRnB56FaHbjDsNUY9KhB1asMxohDnzdVFSD7StaTqjSd9U9HvaRAw=="
 
 MISSING_RH = (
-    "RH fill sync has no fills feed and no Robinhood API credentials. "
-    "Live fills are read from the Robinhood Trading MCP, which this workflow cannot call. "
-    "Pass --from-json or add data/rh_fills.json (or RH_FILLS_PATH). "
-    "A later REST path uses RH_API_KEY and RH_BASE64_PRIVATE_KEY, optional RH_ACCOUNT_NUMBER. "
+    "RH fill sync needs GitHub Actions secrets RH_API_KEY and RH_BASE64_PRIVATE_KEY. "
+    "Those are the Robinhood Crypto Trading API key and the base64 Ed25519 private-key seed. "
+    "This client does not use a bearer token. "
+    "RH_AGENTIC_ACCOUNT selects the Agentic account when set. "
     "No orders were read and kpi_trades was not changed."
 )
 MIGRATION_HINT = (
@@ -520,14 +529,12 @@ def path_from_next(next_url: str) -> str:
 
 
 def orders_path(account: str, updated_at_start: str) -> str:
-    if account:
-        if not re.fullmatch(r"[A-Za-z0-9]+", account):
-            raise SyncError("RH_ACCOUNT_NUMBER has unexpected characters")
-        return (
-            "/api/v2/crypto/trading/orders/"
-            f"?account_number={account}&state=filled&updated_at_start={updated_at_start}&limit=100"
-        )
-    return f"/api/v1/crypto/trading/orders/?state=filled&updated_at_start={updated_at_start}&limit=100"
+    if not re.fullmatch(r"[A-Za-z0-9]+", account):
+        raise SyncError("RH_AGENTIC_ACCOUNT has unexpected characters")
+    return (
+        "/api/v2/crypto/trading/orders/"
+        f"?account_number={account}&state=filled&updated_at_start={updated_at_start}&limit=100"
+    )
 
 
 def fetch_filled_orders(api_key: str, private_key_b64: str, account: str, updated_at_start: str) -> list[dict]:
@@ -764,10 +771,17 @@ def env_values() -> dict[str, str]:
         "SUPABASE_DB_URL",
         "RH_API_KEY",
         "RH_BASE64_PRIVATE_KEY",
-        "RH_ACCOUNT_NUMBER",
+        "RH_AGENTIC_ACCOUNT",
         "RH_FILLS_PATH",
     )
     return {name: (os.environ.get(name) or "").strip() for name in names}
+
+
+def agentic_account(env: dict[str, str]) -> str:
+    chosen = (env.get("RH_AGENTIC_ACCOUNT") or DEFAULT_AGENTIC_ACCOUNT).strip()
+    if not re.fullmatch(r"[A-Za-z0-9]+", chosen):
+        raise SyncError("RH_AGENTIC_ACCOUNT has unexpected characters")
+    return chosen
 
 
 def rh_credentials(env: dict[str, str]) -> tuple[str, str, str] | None:
@@ -775,7 +789,7 @@ def rh_credentials(env: dict[str, str]) -> tuple[str, str, str] | None:
     private_key = env.get("RH_BASE64_PRIVATE_KEY") or ""
     if not api_key or not private_key:
         return None
-    return api_key, private_key, env.get("RH_ACCOUNT_NUMBER") or ""
+    return api_key, private_key, agentic_account(env)
 
 
 def load_order_batch(
@@ -807,7 +821,7 @@ def public_sync_message(message: str) -> str:
     for name in (
         "RH_API_KEY",
         "RH_BASE64_PRIVATE_KEY",
-        "RH_ACCOUNT_NUMBER",
+        "RH_AGENTIC_ACCOUNT",
         "SUPABASE_SERVICE_ROLE_KEY",
         "SUPABASE_DB_URL",
     ):
@@ -1082,10 +1096,19 @@ def self_test() -> int:
     try:
         load_order_batch({}, None, [], Path("/no/such/cursor.json"), Path("/no/such/rh_fills.json"))
     except SyncError as exc:
-        if "RH_API_KEY" not in str(exc) or "rh_fills.json" not in str(exc):
+        if "RH_API_KEY" not in str(exc) or "RH_BASE64_PRIVATE_KEY" not in str(exc):
+            raise
+        if "RH_AGENTIC_ACCOUNT" not in str(exc):
             raise
     else:
-        raise SyncError("missing RH feed did not fail")
+        raise SyncError("missing RH secrets did not fail")
+    if agentic_account({}) != DEFAULT_AGENTIC_ACCOUNT:
+        raise SyncError("Agentic account default was not applied")
+    if agentic_account({"RH_AGENTIC_ACCOUNT": "311268002573"}) != "311268002573":
+        raise SyncError("RH_AGENTIC_ACCOUNT did not override the default")
+    listed = orders_path(DEFAULT_AGENTIC_ACCOUNT, "2026-09-01T00:00:00Z")
+    if "/api/v2/crypto/trading/orders/" not in listed or "state=filled" not in listed:
+        raise SyncError("orders path is not a filled-order GET")
     from tempfile import TemporaryDirectory
 
     with TemporaryDirectory() as tmp:
