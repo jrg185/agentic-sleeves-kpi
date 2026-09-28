@@ -116,7 +116,7 @@ Optional seed override on a row: `start`, `seed`, `start_usd`, `seed_usd`, or `b
 | `pnl_frac` | Trade P&L ÷ sleeve seed |
 | `running_pnl_frac` | Cumulative realized P&L through that fill ÷ sleeve seed. Export regenerates this per sleeve in timestamp order. Crypto seed $300, equities seed $500. |
 | `running_balance_frac` | Book at that fill ÷ sleeve seed, where book = start + cumulative realized P&L. Not cash leftover and not open-position mark-to-market. |
-| `why` | Full note. No `left()` truncation. No PII. A machine `RH Agentic backfill order <uuid>` string is not the human note. |
+| `why` | Full note. No `left()` truncation. No PII. A machine `RH Agentic backfill order <uuid>` or `RH Agentic sync order <uuid>` string is not the human note. New fills leave `why` empty unless the payload has a human note. |
 
 Export always recomputes `running_pnl_frac` and `running_balance_frac` from warehouse trade P&L before writing JSON. It does not copy a sheet running balance. When the scrubbed row includes `pnl_trade_usd`, the sum is dollars then ÷ seed. Otherwise it sums `pnl_frac_of_book` (each value is already trade P&L ÷ seed). `why` is written in full. If `why` is a machine order string and `notes` is human, the JSON `why` is the notes text.
 
@@ -189,7 +189,7 @@ JSON
 gh workflow run export-kpi.yml --repo jrg185/the-book -f sync_rh_json="$(cat fills.json)"
 ```
 
-The Action writes that payload to `/tmp/rh-fill.json` and runs `scripts/sync_rh_kpi_trades.py --from-json`. The same run then refreshes sleeve snapshots and exports. USDC and funding pairs are skipped. `sleeve` is `crypto` or `equities` from `asset_class` (a bare equity symbol also maps to `equities`). An object with `"asset_class": "equity"` and `"symbol": "QCOM"` is sleeve `equities`. Extra MCP fields and account numbers are not written.
+The Action writes that payload to `/tmp/rh-fill.json` and runs `scripts/sync_rh_kpi_trades.py --from-json`. The same run then refreshes sleeve snapshots and exports. USDC and funding pairs are skipped. `sleeve` is `crypto` or `equities` from `asset_class` (a bare equity symbol also maps to `equities`). An object with `"asset_class": "equity"` and `"symbol": "QCOM"` is sleeve `equities`. Extra MCP fields and account numbers are not written. The Robinhood id is stored in `order_id` only. `why` and `notes` stay null unless the fill carries a human `why`, `notes`, or `note`. A machine `RH Agentic backfill|sync order <uuid>` string and the bare placeholder `backfill from RH` are not stored. `ON CONFLICT (order_id) DO NOTHING` leaves an existing human why in place.
 
 A local upsert, without Actions, is the same mapper:
 
@@ -306,4 +306,6 @@ python3 scripts/backfill_notes_from_sheet.py \
   --apply
 ```
 
-The script matches `order_id` to the UUID inside `why`, else sleeve + ticker + side + qty + timestamp (sheet clocks are America/New_York). It updates `why` and `notes` only where the sheet has a human note. It does not insert rows and does not change qty. Re-run Export KPI afterward so Pages picks up the notes. The cloud agent that added this script could read the sheet and could not write `kpi_trades` (no service role in that environment).
+The script matches sheet `order_id` to `kpi_trades.order_id` or to a UUID still stored in `why`, else sleeve + ticker + side + qty + timestamp (sheet clocks are America/New_York). Sheet human why replaces a machine warehouse why. When the sheet does not mention a row, and warehouse `notes` is human while `why` is `RH Agentic backfill|sync order <uuid>`, notes is copied onto why. It does not insert rows and does not change qty.
+
+Dry-run is the default: the commands above with `--dry-run`, or with neither flag, print the plan and write nothing. `--apply` writes `why` and `notes`. Passing both `--dry-run` and `--apply` still does not write. Export KPI does not run this script and does not read the sheet. Re-run Export KPI afterward so Pages picks up the notes. The cloud agent that added this script could read the sheet and could not write `kpi_trades` (no service role in that environment).

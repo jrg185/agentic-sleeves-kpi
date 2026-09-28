@@ -2,7 +2,12 @@
 """One-shot backfill of kpi_trades why/notes from a Google Sheet CSV.
 
 Not part of Export KPI. The sheet is not a live source. Export regenerates
-running P&L from the warehouse and does not read this file.
+running P&L from the warehouse and does not read this file or the sheet.
+
+Dry-run is the default. It prints planned why/notes updates and writes
+nothing. `--dry-run` does the same thing when it is passed with `--apply`.
+`--apply` writes, and only when SUPABASE_SERVICE_ROLE_KEY or SUPABASE_DB_URL
+is set. Without those credentials the script exits 2 and writes nothing.
 
 Sheet (human notes only):
   https://docs.google.com/spreadsheets/d/14o00TKyylOQYFHecAQ5RMlhYCDEOkxaJXrj1lGrtceo
@@ -26,18 +31,19 @@ Eng exports each tab to CSV (File → Download, or the connector) and runs:
 Project: agentic-signals (bsnqwgbshwszbjncglqx).
 
 Match order:
-  1. Sheet order_id equals a UUID in kpi_trades.why (or order_id if selected).
+  1. Sheet order_id equals kpi_trades.order_id, or a UUID still stored in why.
   2. Else sleeve + ticker + side + qty + timestamp within 120 seconds.
      Sheet timestamps are America/New_York (Excel serial or clock time).
 
 Updates only why and notes, and only when the sheet cell is a human note.
 A human note is non-empty and is not `RH Agentic backfill|sync order <uuid>`.
-Machine warehouse why is replaced by the sheet why, or by sheet notes when
-the sheet why cell is empty. Rows that do not match, or match more than one
+Sheet human why replaces warehouse why, including a machine stub. Sheet notes
+fill why when the sheet why cell is empty. Rows the sheet does not mention
+are still updated when warehouse notes is human and why is a machine stub:
+notes is copied onto why. Rows that do not match, or match more than one
 fill, are skipped. Qty, price, and pnl are not written.
 
 `--apply` uses SUPABASE_SERVICE_ROLE_KEY (REST PATCH) or SUPABASE_DB_URL.
-Without credentials, `--apply` exits 2 and writes nothing.
 """
 
 from __future__ import annotations
@@ -71,8 +77,12 @@ QTY_TOL = Decimal("0.00000001")
 USER_AGENT = "the-book-notes-backfill/1"
 
 SELECT_TRIES = (
+    "id,sleeve,timestamp_et,ticker,side,qty,why,notes,order_id",
+    "sleeve,timestamp_et,ticker,side,qty,why,notes,order_id",
     "id,sleeve,timestamp_et,ticker,side,qty,why,notes",
     "sleeve,timestamp_et,ticker,side,qty,why,notes",
+    "id,sleeve,timestamp_et,ticker,side,qty,why,order_id",
+    "sleeve,timestamp_et,ticker,side,qty,why,order_id",
     "id,sleeve,timestamp_et,ticker,side,qty,why",
     "sleeve,timestamp_et,ticker,side,qty,why",
 )
@@ -306,7 +316,24 @@ def build_plan(sheet_rows: list[dict], trades: list[dict]) -> tuple[list[dict], 
             continue
         claimed.add(key)
         updates.append({"trade": trade, "set": changed, "sheet": sheet_row})
+    updates.extend(promote_notes_to_why(trades, claimed))
     return updates, skips
+
+
+def promote_notes_to_why(trades: list[dict], claimed: set) -> list[dict]:
+    """Copy human warehouse notes onto why when why is still a machine stub."""
+    promoted = []
+    for trade in trades:
+        key = trade_key(trade)
+        if key in claimed:
+            continue
+        notes = human_note(trade.get("notes"))
+        why = "" if trade.get("why") is None else str(trade.get("why")).strip()
+        if not notes or not MACHINE_WHY.match(why) or why == notes:
+            continue
+        claimed.add(key)
+        promoted.append({"trade": trade, "set": {"why": notes}, "sheet": None})
+    return promoted
 
 
 def trade_key(trade: dict) -> tuple:
@@ -381,29 +408,46 @@ def fetch_trades_db(db_url: str) -> tuple[list[dict], bool]:
         import psycopg
     except ImportError as exc:
         raise BackfillError("psycopg is required for SUPABASE_DB_URL") from exc
-    notes_ok = True
-    sql = """
-        select id, sleeve, timestamp_et, ticker, side, qty, why, notes
-        from public.kpi_trades
-        order by timestamp_et asc
-    """
+    attempts = (
+        (
+            """
+            select id, sleeve, timestamp_et, ticker, side, qty, why, notes, order_id
+            from public.kpi_trades
+            order by timestamp_et asc
+            """,
+            True,
+        ),
+        (
+            """
+            select id, sleeve, timestamp_et, ticker, side, qty, why, notes
+            from public.kpi_trades
+            order by timestamp_et asc
+            """,
+            True,
+        ),
+        (
+            """
+            select sleeve, timestamp_et, ticker, side, qty, why
+            from public.kpi_trades
+            order by timestamp_et asc
+            """,
+            False,
+        ),
+    )
     try:
         with psycopg.connect(db_url, connect_timeout=20) as conn:
             with conn.cursor() as cur:
-                try:
-                    cur.execute(sql)
-                except Exception:
-                    conn.rollback()
-                    notes_ok = False
-                    cur.execute(
-                        """
-                        select sleeve, timestamp_et, ticker, side, qty, why
-                        from public.kpi_trades
-                        order by timestamp_et asc
-                        """
-                    )
-                columns = [desc.name for desc in cur.description]
-                return [dict(zip(columns, row)) for row in cur.fetchall()], notes_ok
+                last_error = None
+                for sql, notes_ok in attempts:
+                    try:
+                        cur.execute(sql)
+                    except Exception as exc:
+                        conn.rollback()
+                        last_error = exc
+                        continue
+                    columns = [desc.name for desc in cur.description]
+                    return [dict(zip(columns, row)) for row in cur.fetchall()], notes_ok
+                raise BackfillError("database read of kpi_trades failed. No notes were written.") from last_error
     except BackfillError:
         raise
     except Exception as exc:
@@ -549,6 +593,28 @@ def self_test() -> int:
             "why": "SWING unlock Joe/Wags; soft tgt flexible",
             "notes": "",
         },
+        {
+            "id": "4",
+            "sleeve": "crypto",
+            "timestamp_et": "2026-09-27T01:00:00+00:00",
+            "ticker": "OP",
+            "side": "buy",
+            "qty": "3",
+            "why": "RH Agentic sync order 6ab90000-0000-4000-8000-000000000004",
+            "notes": "sized the dip",
+            "order_id": "6ab90000-0000-4000-8000-000000000004",
+        },
+        {
+            "id": "5",
+            "sleeve": "crypto",
+            "timestamp_et": "2026-09-27T02:00:00+00:00",
+            "ticker": "RENDER",
+            "side": "buy",
+            "qty": "1.5",
+            "why": None,
+            "notes": None,
+            "order_id": "6ab90000-0000-4000-8000-000000000005",
+        },
     ]
     sheet_rows = [
         {
@@ -611,10 +677,20 @@ def self_test() -> int:
             "why": "missing fill",
             "notes": None,
         },
+        {
+            "sleeve": "crypto",
+            "ticker": "RENDER",
+            "side": "buy",
+            "qty": None,
+            "timestamp": None,
+            "order_id": "6ab90000-0000-4000-8000-000000000005",
+            "why": "breakout add",
+            "notes": "breakout add",
+        },
     ]
     updates, skips = build_plan(sheet_rows, trades)
     by_id = {update["trade"].get("id"): update for update in updates if update["trade"].get("id")}
-    if set(by_id) != {"1", "2"}:
+    if set(by_id) != {"1", "2", "4", "5"}:
         raise BackfillError(f"planned ids {set(by_id)} skips {skips}")
     if by_id["1"]["set"] != {"why": "backfill from RH", "notes": "backfill from RH"}:
         raise BackfillError(f"AVAX payload {by_id['1']['set']}")
@@ -629,6 +705,79 @@ def self_test() -> int:
     qcom = next(update for update in updates if update["trade"]["ticker"] == "QCOM")
     if qcom["set"] != {"notes": "First live fill."}:
         raise BackfillError(f"QCOM payload {qcom['set']}")
+    if by_id["4"]["set"] != {"why": "sized the dip"}:
+        raise BackfillError(f"notes copy {by_id['4']['set']}")
+    if by_id["5"]["set"] != {"why": "breakout add", "notes": "breakout add"}:
+        raise BackfillError(f"order_id match {by_id['5']['set']}")
+
+    link_id = "6ab90000-0000-4000-8000-000000000009"
+    sheet_wins, _sheet_skips = build_plan(
+        [
+            {
+                "sleeve": "crypto",
+                "ticker": "LINK",
+                "side": "buy",
+                "qty": Decimal("1"),
+                "timestamp": None,
+                "order_id": link_id,
+                "why": "sheet thesis",
+                "notes": "sheet detail",
+            }
+        ],
+        [
+            {
+                "id": "9",
+                "sleeve": "crypto",
+                "timestamp_et": "2026-09-27T03:00:00+00:00",
+                "ticker": "LINK",
+                "side": "buy",
+                "qty": "1",
+                "why": f"RH Agentic sync order {link_id}",
+                "notes": "warehouse note",
+                "order_id": link_id,
+            }
+        ],
+    )
+    if len(sheet_wins) != 1 or sheet_wins[0]["set"].get("why") != "sheet thesis":
+        raise BackfillError(f"sheet why lost to warehouse notes {sheet_wins}")
+    if sheet_wins[0]["set"].get("notes") != "sheet detail":
+        raise BackfillError(f"sheet notes {sheet_wins[0]['set']}")
+    lonely_id = "6ab90000-0000-4000-8000-000000000010"
+    untouched, _lonely_skips = build_plan(
+        [],
+        [
+            {
+                "id": "10",
+                "sleeve": "crypto",
+                "timestamp_et": "2026-09-27T04:00:00+00:00",
+                "ticker": "DOT",
+                "side": "buy",
+                "qty": "1",
+                "why": f"RH Agentic sync order {lonely_id}",
+                "notes": None,
+                "order_id": lonely_id,
+            }
+        ],
+    )
+    if untouched:
+        raise BackfillError(f"null notes cleared a stub {untouched}")
+    kept_human, _kept_skips = build_plan(
+        [],
+        [
+            {
+                "id": "11",
+                "sleeve": "equities",
+                "timestamp_et": "2026-09-25T19:37:00+00:00",
+                "ticker": "QCOM",
+                "side": "buy",
+                "qty": "1",
+                "why": "SWING unlock Joe/Wags; soft tgt flexible",
+                "notes": "First live fill.",
+            }
+        ],
+    )
+    if kept_human:
+        raise BackfillError(f"human why was rewritten from notes {kept_human}")
 
     from tempfile import TemporaryDirectory
 
