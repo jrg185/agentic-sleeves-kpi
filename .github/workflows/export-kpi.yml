@@ -1,14 +1,15 @@
 name: Export KPI
 
 # Refreshes public.kpi_sleeve_snapshots, then reads the scrubbed views.
-# Robinhood has no fill webhook. This Action does not poll Robinhood.
-# On-fill ingest: repository_dispatch rh-fill, or workflow_dispatch input
-# sync_rh_json. The step writes that JSON to a temp file, upserts kpi_trades,
-# then continues with refresh and export.
-# The schedule is mark refresh only. It does not poll Robinhood. With no fill
-# payload the sync step exits 0. A requested payload that will not parse
-# exits non-zero and stamps data/meta.json. A failed refresh does the same.
-# Pull requests only self-test.
+# Robinhood has no fill webhook. Standing sync is hourly.
+# Cron 0 * * * * polls only when RH_API_KEY and RH_BASE64_PRIVATE_KEY are
+# both set. Hourly Actions poll skipped otherwise, exit 0. No Robinhood call.
+# Tonight Crypto Desk polls MCP get_crypto_orders and workflow_dispatch the JSON.
+# Bonus: repository_dispatch rh-fill or workflow_dispatch sync_rh_json writes
+# a temp file, upserts kpi_trades, then continues with refresh and export.
+# The */15 cron only refreshes marks. A bad requested payload exits non-zero
+# and stamps data/meta.json. A failed refresh does the same.
+# Pull requests only self-test. ROBINHOOD_TOKEN is not used.
 # Sleeve is crypto or equities from asset class. USDC and funding are skipped.
 # Marks: public Coinbase ticker (crypto) and Yahoo chart (equities).
 # FINNHUB_API_KEY, COINSTATS_API_KEY, and ALPHA_VANTAGE_API_KEY are optional.
@@ -16,7 +17,9 @@ name: Export KPI
 
 on:
   schedule:
-    # Mark refresh only. This cron does not poll Robinhood.
+    # Preferred Actions poll at minute 0. Skips when Robinhood secrets are absent.
+    - cron: "0 * * * *"
+    # Mark refresh only. These crons do not call Robinhood.
     # US cash session in both EDT and EST (about 9:30am–5:00pm ET), every 15 minutes.
     - cron: "*/15 13-21 * * 1-5"
     # Hourly outside that window, including weekends, so the crypto sleeve does not sit overnight.
@@ -64,6 +67,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Hourly Robinhood poll
+        if: github.event_name == 'schedule' && github.event.schedule == '0 * * * *'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          RH_API_KEY: ${{ secrets.RH_API_KEY }}
+          RH_BASE64_PRIVATE_KEY: ${{ secrets.RH_BASE64_PRIVATE_KEY }}
+          RH_AGENTIC_ACCOUNT: ${{ secrets.RH_AGENTIC_ACCOUNT }}
+        run: |
+          if [ -z "${RH_API_KEY}" ] || [ -z "${RH_BASE64_PRIVATE_KEY}" ]; then
+            echo "Hourly Actions poll skipped: RH_API_KEY and RH_BASE64_PRIVATE_KEY are unset. No Robinhood call."
+            exit 0
+          fi
+          python3 -m pip install --disable-pip-version-check --break-system-packages 'pynacl>=1.5,<2'
+          python3 scripts/sync_rh_kpi_trades.py --from-rh
 
       - name: Stage on-fill JSON
         id: stage
@@ -143,6 +163,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- data/kpi_summary.json data/kpi_trades_scrubbed.json data/models_oos.json data/meta.json
+          if [ -f data/rh_kpi_sync_cursor.json ]; then
+            git add -- data/rh_kpi_sync_cursor.json
+          fi
           if git diff --cached --quiet; then
             echo "KPI JSON unchanged."
           else

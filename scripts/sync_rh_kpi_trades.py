@@ -1,24 +1,41 @@
 #!/usr/bin/env python3
 """Upsert filled Robinhood crypto orders into public.kpi_trades.
 
-Robinhood has no fill webhook. Official tools are poll-based, and this
-Action does not poll them. There is no Robinhood REST secret and this script
-does not read ROBINHOOD_TOKEN.
+Robinhood has no fill webhook. Standing sync is an hourly poll, not a
+15-minute Action and not a webhook. This script does not read ROBINHOOD_TOKEN.
+That token is not a merge requirement.
 
-Standing path: a desk detects a fill (place_* returned filled, or the desk's
-own poller saw a new filled order id) and immediately sends that JSON here.
-Export KPI writes it to a temp file, upserts kpi_trades, then refreshes and
-exports. Call either of these. Do not wait for the mark-refresh cron.
+Tonight Crypto Desk runs the poll. Once an hour, from a checkout of this repo:
 
-  gh api repos/jrg185/the-book/dispatches --method POST --input - <<'JSON'
-  {"event_type":"rh-fill","client_payload":{"id":"<uuid>","currency_code":"GRT","side":"buy","state":"filled","cumulative_quantity":"100","average_price":"0.05","created_at":"2026-09-28T18:00:00Z"}}
-  JSON
+  git pull
+  python3 scripts/sync_rh_kpi_trades.py --print-cursor
+
+Then Robinhood Trading MCP get_crypto_orders:
+
+  rhs_account_number  546048042
+  state               filled
+  updated_at_gte      the timestamp --print-cursor printed
+
+Paginate with the MCP cursor argument set to the previous response next
+value until next is absent. Save every page's orders as one JSON document
+and dispatch Export KPI. Actions upserts with the repo Supabase secrets,
+refreshes marks, and exports. It also stores the next poll timestamp in
+data/rh_kpi_sync_cursor.json when that file changes.
 
   gh workflow run export-kpi.yml --repo jrg185/the-book -f sync_rh_json="$(cat fills.json)"
 
-client_payload must be an object. A list is valid for --from-json and for
-sync_rh_json. The mark-refresh schedule has no payload, so that run skips
-this script with exit 0 and does not call Robinhood.
+A local upsert is the same mapper, if SUPABASE_URL and
+SUPABASE_SERVICE_ROLE_KEY are in the environment:
+
+  python3 scripts/sync_rh_kpi_trades.py --from-json fills.json
+
+Optional later: Actions cron 0 * * * * calls --from-rh when RH_API_KEY and
+RH_BASE64_PRIVATE_KEY are both set. If either is absent, that step exits 0
+and does not call Robinhood. RH_AGENTIC_ACCOUNT overrides 546048042.
+
+Bonus, not the standing path: repository_dispatch rh-fill, or a fill JSON
+passed the moment a desk sees one. Same schema. The */15 cron only refreshes
+marks.
 
 If no fills feed is present, this script exits 0. Fail-loud (exit 1 and
 stamp data/meta.json) only when a feed was explicitly requested and the input
@@ -136,22 +153,30 @@ sends these the same way when it detects a fill:
 from __future__ import annotations
 
 import argparse
+import base64
 import datetime as dt
 import json
 import os
 import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from decimal import Decimal
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
+CURSOR_PATH = DATA / "rh_kpi_sync_cursor.json"
 FEEDS_PATH = DATA / "rh_fills.json"
 MIGRATION_PATH = ROOT / "scripts" / "migrate_kpi_trades_order_id.sql"
 DEFAULT_URL = "https://bsnqwgbshwszbjncglqx.supabase.co"
+RH_BASE = "https://trading.robinhood.com"
+DEFAULT_AGENTIC_ACCOUNT = "546048042"
+BOOTSTRAP_CURSOR = "2026-09-26T00:00:00Z"
+OVERLAP = dt.timedelta(hours=6)
 DUST = Decimal("0.00000001")
+PAGE_CAP = 50
 SYMBOL = re.compile(r"^[A-Z0-9]{1,15}$")
 UUID_RE = re.compile(
     r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
@@ -181,6 +206,13 @@ insert into public.kpi_trades (
 )
 on conflict (order_id) do nothing
 """
+
+# Public example from https://docs.robinhood.com/crypto/trading/ (not a live key).
+DOC_API_KEY = "rh-api-6148effc-c0b1-486c-8940-a1d099456be6"
+DOC_PRIVATE_KEY = "xQnTJVeQLmw1/Mg2YimEViSpw/SdJcgNXZ5kQkAXNPU="
+DOC_TIMESTAMP = "1698708981"
+DOC_PATH = "/api/v1/crypto/trading/orders/"
+DOC_SIGNATURE = "q/nEtxp/P2Or3hph3KejBqnw5o9qeuQ+hYRnB56FaHbjDsNUY9KhB1asMxohDnzdVFSD7StaTqjSd9U9HvaRAw=="
 
 MIGRATION_HINT = (
     "public.kpi_trades.order_id is not ready. Apply scripts/migrate_kpi_trades_order_id.sql "
@@ -225,6 +257,10 @@ def parse_ts(value) -> dt.datetime:
 
 def iso_utc(value) -> str:
     return parse_ts(value).astimezone(dt.timezone.utc).isoformat()
+
+
+def iso_z(value) -> str:
+    return parse_ts(value).astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def uuids_in(text: str) -> set[str]:
@@ -330,6 +366,13 @@ def fill_time(order: dict) -> str:
         if order.get(key):
             return iso_utc(order[key])
     raise SyncError("filled order is missing a timestamp")
+
+
+def order_updated_at(order: dict) -> dt.datetime | None:
+    for key in ("updated_at", "created_at"):
+        if order.get(key):
+            return parse_ts(order[key])
+    return None
 
 
 def map_order(order: dict) -> dict | None:
@@ -503,6 +546,177 @@ def sql_statements(text: str) -> list[str]:
     return [part.strip() for part in "\n".join(kept).split(";") if part.strip()]
 
 
+def sign_message(private_key_b64: str, message: str) -> str:
+    try:
+        seed = base64.b64decode(private_key_b64, validate=True)
+    except Exception as exc:
+        raise SyncError("RH_BASE64_PRIVATE_KEY is not valid base64") from exc
+    if len(seed) == 64:
+        seed = seed[:32]
+    if len(seed) != 32:
+        raise SyncError("RH_BASE64_PRIVATE_KEY is not a 32-byte Ed25519 seed")
+    signature = None
+    try:
+        from nacl.signing import SigningKey
+
+        signature = SigningKey(seed).sign(message.encode("utf-8")).signature
+    except ImportError:
+        signature = None
+    if signature is None:
+        try:
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+            signature = Ed25519PrivateKey.from_private_bytes(seed).sign(message.encode("utf-8"))
+        except ImportError as exc:
+            raise SyncError(
+                "Hourly Robinhood poll needs pynacl or cryptography to sign GET requests."
+            ) from exc
+    return base64.b64encode(signature).decode("utf-8")
+
+
+def request_message(api_key: str, timestamp: str, path: str, method: str, body: str = "") -> str:
+    return f"{api_key}{timestamp}{path}{method}{body}"
+
+
+def rh_get(api_key: str, private_key_b64: str, path: str) -> dict:
+    if not path.startswith("/") or path.startswith("//"):
+        raise SyncError("refusing a Robinhood path that is not on trading.robinhood.com")
+    timestamp = str(int(dt.datetime.now(dt.timezone.utc).timestamp()))
+    message = request_message(api_key, timestamp, path, "GET")
+    signature = sign_message(private_key_b64, message)
+    request = urllib.request.Request(
+        RH_BASE + path,
+        headers={
+            "x-api-key": api_key,
+            "x-signature": signature,
+            "x-timestamp": timestamp,
+            "Accept": "application/json",
+            "User-Agent": USER_AGENT,
+        },
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=40) as response:
+            raw = response.read()
+    except urllib.error.HTTPError as exc:
+        raise SyncError(f"Robinhood GET orders failed with HTTP {exc.code}. kpi_trades was not changed.") from None
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise SyncError("Robinhood GET orders failed: network error. kpi_trades was not changed.") from exc
+    try:
+        payload = json.loads(raw.decode("utf-8")) if raw else None
+    except json.JSONDecodeError as exc:
+        raise SyncError("Robinhood GET orders returned non-JSON. kpi_trades was not changed.") from exc
+    if not isinstance(payload, dict):
+        raise SyncError("Robinhood GET orders returned an unexpected payload. kpi_trades was not changed.")
+    return payload
+
+
+def path_from_next(next_url: str) -> str:
+    if next_url.startswith(RH_BASE):
+        path = next_url[len(RH_BASE) :]
+    else:
+        parsed = urllib.parse.urlparse(next_url)
+        if parsed.scheme or parsed.netloc:
+            raise SyncError("Robinhood pagination left trading.robinhood.com")
+        path = parsed.path
+        if parsed.query:
+            path = f"{path}?{parsed.query}"
+    if not path.startswith("/api/"):
+        raise SyncError("Robinhood pagination path was not an orders path")
+    return path
+
+
+def orders_path(account: str, updated_at_start: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9]+", account):
+        raise SyncError("RH_AGENTIC_ACCOUNT has unexpected characters")
+    return (
+        "/api/v2/crypto/trading/orders/"
+        f"?account_number={account}&state=filled&updated_at_start={updated_at_start}&limit=100"
+    )
+
+
+def fetch_filled_orders(api_key: str, private_key_b64: str, account: str, updated_at_start: str) -> list[dict]:
+    path = orders_path(account, updated_at_start)
+    orders: list[dict] = []
+    seen: set[str] = set()
+    for _ in range(PAGE_CAP):
+        if path in seen:
+            break
+        seen.add(path)
+        payload = rh_get(api_key, private_key_b64, path)
+        batch = payload.get("results")
+        if not isinstance(batch, list):
+            raise SyncError("Robinhood orders response had no results list. kpi_trades was not changed.")
+        orders.extend(item for item in batch if isinstance(item, dict))
+        nxt = payload.get("next")
+        if not nxt:
+            return orders
+        path = path_from_next(str(nxt))
+    raise SyncError("Robinhood orders pagination exceeded 50 pages. kpi_trades was not changed.")
+
+
+def read_cursor(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict) or not payload.get("updated_at"):
+        return None
+    try:
+        return iso_z(payload["updated_at"])
+    except (TypeError, ValueError):
+        return None
+
+
+def write_cursor(path: Path, updated_at: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"updated_at": iso_z(updated_at)}
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def query_start(cursor: str) -> str:
+    return iso_z(parse_ts(cursor) - OVERLAP)
+
+
+def poll_start(path: Path = CURSOR_PATH) -> str:
+    """updated_at_gte for the next MCP get_crypto_orders call."""
+    return query_start(read_cursor(path) or BOOTSTRAP_CURSOR)
+
+
+def advance_cursor(previous: str, orders: list[dict]) -> str | None:
+    moments = [stamp for order in orders if (stamp := order_updated_at(order))]
+    if not moments:
+        return None
+    latest = max(moments)
+    if parse_ts(previous) > latest:
+        return previous
+    return iso_z(latest)
+
+
+def remember_cursor(path: Path, orders: list[dict]) -> None:
+    previous = read_cursor(path) or BOOTSTRAP_CURSOR
+    nxt = advance_cursor(previous, orders)
+    if nxt:
+        write_cursor(path, nxt)
+
+
+def agentic_account(env: dict[str, str]) -> str:
+    chosen = (env.get("RH_AGENTIC_ACCOUNT") or DEFAULT_AGENTIC_ACCOUNT).strip()
+    if not re.fullmatch(r"[A-Za-z0-9]+", chosen):
+        raise SyncError("RH_AGENTIC_ACCOUNT has unexpected characters")
+    return chosen
+
+
+def rh_credentials(env: dict[str, str]) -> tuple[str, str, str] | None:
+    api_key = (env.get("RH_API_KEY") or "").strip()
+    private_key = (env.get("RH_BASE64_PRIVATE_KEY") or "").strip()
+    if not api_key or not private_key:
+        return None
+    return api_key, private_key, agentic_account(env)
+
+
 def rest_headers(key: str) -> dict[str, str]:
     return {
         "apikey": key,
@@ -662,6 +876,9 @@ def env_values() -> dict[str, str]:
         "SUPABASE_DB_URL",
         "SYNC_RH_JSON",
         "RH_FILLS_PATH",
+        "RH_API_KEY",
+        "RH_BASE64_PRIVATE_KEY",
+        "RH_AGENTIC_ACCOUNT",
     )
     return {name: (os.environ.get(name) or "").strip() for name in names}
 
@@ -711,6 +928,8 @@ def public_sync_message(message: str) -> str:
         "SUPABASE_SERVICE_ROLE_KEY",
         "SUPABASE_DB_URL",
         "SYNC_RH_JSON",
+        "RH_API_KEY",
+        "RH_BASE64_PRIVATE_KEY",
         "ROBINHOOD_TOKEN",
     ):
         secret = (os.environ.get(name) or "").strip()
@@ -734,19 +953,39 @@ def sync(
     from_json: str | None = None,
     default_feed: Path = FEEDS_PATH,
     env: dict[str, str] | None = None,
+    from_rh: bool = False,
+    cursor_path: Path = CURSOR_PATH,
 ) -> int:
     env = env_values() if env is None else env
-    if not feed_requested(env, from_json, default_feed):
-        print("rh sync skipped: no fill payload. This run does not poll Robinhood.")
+    orders: list[dict] | None = None
+    creds = None
+    if feed_requested(env, from_json, default_feed):
+        orders = load_requested_orders(env, from_json, default_feed)
+    elif from_rh:
+        creds = rh_credentials(env)
+        if not creds:
+            raise SyncError(
+                "Hourly Robinhood poll was requested but RH_API_KEY and "
+                "RH_BASE64_PRIVATE_KEY are unset. No orders were read. "
+                "ROBINHOOD_TOKEN is not used. kpi_trades was not changed."
+            )
+    else:
+        print("rh sync skipped: no fill payload and no Robinhood API secrets.")
         return 0
-    orders = load_requested_orders(env, from_json, default_feed)
     if not (env.get("SUPABASE_SERVICE_ROLE_KEY") or env.get("SUPABASE_DB_URL")):
         raise SyncError(MISSING_SB)
     if env.get("SUPABASE_DB_URL"):
         apply_migration(env["SUPABASE_DB_URL"])
     existing, source = load_trades(env)
+    if orders is None:
+        if creds is None:
+            raise SyncError("Hourly Robinhood poll has no API credentials. kpi_trades was not changed.")
+        api_key, private_key, account = creds
+        start = query_start(read_cursor(cursor_path) or BOOTSTRAP_CURSOR)
+        orders = fetch_filled_orders(api_key, private_key, account, start)
     fresh = rows_from_orders(orders, existing)
     upsert_rows(env, fresh, source)
+    remember_cursor(cursor_path, orders)
     print(f"rh sync warehouse={source} fetched={len(orders)} upserted={len(fresh)}")
     return 0
 
@@ -961,17 +1200,64 @@ def self_test() -> int:
         raise SyncError("migration does not add a unique order_id")
     if "rh agentic (backfill|sync) order" not in migration:
         raise SyncError("migration does not copy tonight's backfill uuid onto order_id")
-    source = Path(__file__).read_text(encoding="utf-8")
-    rest_needles = ("trading." + "robinhood.com", "RH_" + "API_KEY", "def sign_" + "message", "x-api-" + "key")
-    if any(needle in source for needle in rest_needles):
-        raise SyncError("script still contains a Robinhood REST client")
     workflow = (ROOT / ".github" / "workflows" / "export-kpi.yml").read_text(encoding="utf-8")
     if "repository_dispatch:" not in workflow or "rh-fill" not in workflow:
         raise SyncError("export workflow has no rh-fill ingest")
-    if "does not poll Robinhood" not in workflow:
-        raise SyncError("export workflow does not say the schedule skips Robinhood")
+    if 'cron: "0 * * * *"' not in workflow:
+        raise SyncError("export workflow has no hourly poll cron")
+    if "Hourly Actions poll skipped" not in workflow:
+        raise SyncError("hourly poll does not skip when Robinhood secrets are absent")
     if "ROBINHOOD_TOKEN:" in workflow:
         raise SyncError("export workflow requires a Robinhood token")
+    if agentic_account({}) != DEFAULT_AGENTIC_ACCOUNT:
+        raise SyncError("Agentic account default was not 546048042")
+    if poll_start(Path("/no/such/rh-cursor.json")) != query_start(BOOTSTRAP_CURSOR):
+        raise SyncError("missing cursor did not use the bootstrap")
+    if query_start("2026-09-28T18:00:01Z") != "2026-09-28T12:00:01Z":
+        raise SyncError("cursor overlap was not 6 hours")
+    listed = orders_path(DEFAULT_AGENTIC_ACCOUNT, "2026-09-26T00:00:00Z")
+    if "state=filled" not in listed or DEFAULT_AGENTIC_ACCOUNT not in listed:
+        raise SyncError("orders path is not a filled-order GET for the Agentic account")
+    try:
+        sync(from_rh=True, env={}, default_feed=Path("/no/such/rh_fills.json"))
+    except SyncError as exc:
+        text = str(exc)
+        if "RH_API_KEY" not in text or "ROBINHOOD_TOKEN is not used" not in text:
+            raise
+        if "read-only" in text.lower() or "disk full" in text.lower():
+            raise SyncError("missing-secret copy must not look like a warehouse outage")
+    else:
+        raise SyncError("hourly poll without secrets did not fail when explicitly requested")
+    message = request_message(DOC_API_KEY, DOC_TIMESTAMP, DOC_PATH, "GET")
+    if message != f"{DOC_API_KEY}{DOC_TIMESTAMP}{DOC_PATH}GET":
+        raise SyncError("GET signature message")
+    try:
+        import nacl.signing  # noqa: F401
+
+        signing = True
+    except ImportError:
+        try:
+            import cryptography.hazmat.primitives.asymmetric.ed25519  # noqa: F401
+
+            signing = True
+        except ImportError:
+            signing = False
+    if signing:
+        body = str(
+            {
+                "client_order_id": "131de903-5a9c-4260-abc1-28d562a5dcf0",
+                "side": "buy",
+                "symbol": "BTC-USD",
+                "type": "market",
+                "market_order_config": {"asset_quantity": "0.1"},
+            }
+        )
+        signed = sign_message(
+            DOC_PRIVATE_KEY,
+            request_message(DOC_API_KEY, DOC_TIMESTAMP, DOC_PATH, "POST", body),
+        )
+        if signed != DOC_SIGNATURE:
+            raise SyncError("documented Ed25519 signature did not match")
     absent = Path("/no/such/rh_fills.json")
     if feed_requested({}, None, absent):
         raise SyncError("missing feed looked requested")
@@ -1065,16 +1351,29 @@ def main(argv: list[str] | None = None) -> int:
         metavar="PATH",
         help="Filled orders JSON. Use - to read stdin.",
     )
+    parser.add_argument(
+        "--print-cursor",
+        action="store_true",
+        help="Print updated_at_gte for the next MCP get_crypto_orders poll.",
+    )
+    parser.add_argument(
+        "--from-rh",
+        action="store_true",
+        help="GET filled orders when RH_API_KEY and RH_BASE64_PRIVATE_KEY are set.",
+    )
     args = parser.parse_args(argv)
     try:
         if args.self_test:
             return self_test()
+        if args.print_cursor:
+            print(poll_start())
+            return 0
         if args.dry_run:
             orders = load_fills(args.from_json) if args.from_json else fixture_orders()
             print(json.dumps(rows_from_orders(orders, []), indent=2))
             print("dry-run: no upsert", file=sys.stderr)
             return 0
-        return sync(from_json=args.from_json)
+        return sync(from_json=args.from_json, from_rh=args.from_rh)
     except SyncError as exc:
         print(str(exc), file=sys.stderr)
         if args.self_test or args.dry_run:

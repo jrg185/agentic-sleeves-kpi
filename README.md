@@ -55,8 +55,8 @@ Pages serves that committed JSON. The browser only fetches `data/*.json`.
 Workflow: [`.github/workflows/export-kpi.yml`](.github/workflows/export-kpi.yml) (same bytes as [`scripts/export-kpi.yml`](scripts/export-kpi.yml)).
 
 - `workflow_dispatch`, `repository_dispatch` type `rh-fill`, pull requests (position math and the RH fill mapper), and pushes to `main` other than `data/**`
-- schedule: mark refresh every 15 minutes on weekdays from 13:00–21:45 UTC (covers 9:30am–4:00pm ET in both EDT and EST), and hourly outside that window including weekends. This cron does not poll Robinhood
-- An on-fill payload is written to a temp file and upserted into `public.kpi_trades`, then the same run refreshes `kpi_sleeve_snapshots` and exports. The schedule has no payload, so it skips the upsert. A bad requested payload, or a failed refresh, does not commit KPI JSON
+- schedule: `0 * * * *` is the Robinhood poll and skips when `RH_API_KEY` or `RH_BASE64_PRIVATE_KEY` is unset. Mark refresh stays every 15 minutes on weekdays from 13:00–21:45 UTC, and hourly outside that window including weekends. Those mark crons do not call Robinhood
+- A fill payload, or a secrets-backed hourly poll, upserts `public.kpi_trades`, then the same run refreshes `kpi_sleeve_snapshots` and exports. A bad requested payload, or a failed refresh, does not commit KPI JSON
 - Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. `SUPABASE_DB_URL` is optional
 - Crypto marks: public Coinbase ticker, then Yahoo `{SYMBOL}-USD`. Equities marks: Finnhub when `FINNHUB_API_KEY` is set, then Yahoo chart. CoinStats and Alpha Vantage are later fallbacks when those keys are set
 - Writes `data/kpi_summary.json`, `data/kpi_trades_scrubbed.json`, `data/models_oos.json`, and `data/meta.json` when they changed
@@ -73,7 +73,7 @@ The writer is in this repo: `scripts/refresh_kpi_snapshots.py`. Export KPI runs 
 
 Order:
 
-1. When a desk sends a fill, sync inserts it into `kpi_trades`. The mark-refresh schedule skips this step.
+1. The hourly poll, or a desk-sent fill, inserts Robinhood fills into `kpi_trades`. The mark-refresh crons skip this step.
 2. Refresh inserts `kpi_sleeve_snapshots`.
 3. Export reads `kpi_summary` and `kpi_trades_scrubbed` and commits JSON only if `as_of` is within 15 minutes.
 4. Pages shows that `as_of`.
@@ -139,13 +139,28 @@ Add these repository secrets (Settings → Secrets and variables → Actions). D
 | `COINSTATS_API_KEY` | Optional crypto mark after Coinbase and Yahoo. |
 | `ALPHA_VANTAGE_API_KEY` | Optional equities mark after Finnhub and Yahoo. |
 
-Public Coinbase and Yahoo marks do not need those quote keys. There is no Robinhood secret on this Action.
+Public Coinbase and Yahoo marks do not need those quote keys. `ROBINHOOD_TOKEN` is not used. Optional later, not required to merge: `RH_API_KEY` and `RH_BASE64_PRIVATE_KEY` turn on the Actions hourly poll. `RH_AGENTIC_ACCOUNT` overrides `546048042` on that poll.
 
 ### RH fill ingest
 
-Robinhood has no fill webhook. The standing path is desk-detected fill, then this ingest workflow, then the upsert, then Export KPI. The `*/15` schedule only refreshes marks. It does not poll Robinhood.
+Robinhood has no fill webhook. Standing sync is an hourly poll. Tonight that poll is Crypto Desk, not Actions. The `0 * * * *` cron skips until the two API secrets exist. The `*/15` cron only refreshes marks.
 
-Call this immediately when `place_*` returns filled, or when the desk's own poller sees a new filled order id. Crypto sends crypto fills. Equities Desk sends equity fills the same way.
+Once an hour, from a checkout of this repo:
+
+```bash
+git pull
+python3 scripts/sync_rh_kpi_trades.py --print-cursor
+```
+
+Call Robinhood Trading MCP `get_crypto_orders` with `rhs_account_number` `546048042`, `state` `filled`, and `updated_at_gte` set to the printed timestamp. If the response has `next`, call again with `cursor` set to that value until `next` is absent. Save the orders as one JSON document (`{"results":[...]}` or `{"data":{"results":[...]}}` or a list). USDC is skipped by the script. Sleeve is `crypto` or `equities` from asset class.
+
+```bash
+gh workflow run export-kpi.yml --repo jrg185/the-book -f sync_rh_json="$(cat fills.json)"
+```
+
+That run upserts, refreshes, and exports. When `data/rh_kpi_sync_cursor.json` changes, the export commit stores the next poll timestamp. Pull before the next hour. A local upsert, if you already have the Supabase secrets, is `python3 scripts/sync_rh_kpi_trades.py --from-json fills.json`.
+
+Bonus, not the standing path: send one fill as soon as you see it. Crypto or Equities Desk can use the same schema.
 
 ```bash
 gh api repos/jrg185/the-book/dispatches --method POST --input - <<'JSON'
@@ -190,7 +205,7 @@ Apply [`scripts/migrate_kpi_trades_order_id.sql`](scripts/migrate_kpi_trades_ord
 psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/migrate_kpi_trades_order_id.sql
 ```
 
-After the migration is applied, send the fill with `gh api .../dispatches` or `gh workflow run`. That run upserts, refreshes, and exports, so the fill shows on https://jrg185.github.io/the-book/ when the workflow finishes. The 15-minute cron does not wait for Robinhood.
+After the migration is applied, the hourly `gh workflow run` upserts, refreshes, and exports, so a new fill shows on https://jrg185.github.io/the-book/ when that run finishes. The 15-minute cron does not call Robinhood.
 
 After the Supabase secrets are saved, run **Actions → Export KPI → Run workflow**. A successful export sets `meta.source` to `supabase` and replaces the KPI JSON. `fixtures/` and `data/models.json` stay as they are.
 
