@@ -1144,6 +1144,17 @@
     "running_balance_frac": 1.097453
   },
   {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-29T02:49:12.852393+00:00",
+    "ticker": "LINK",
+    "side": "sell",
+    "notional_frac_of_book": 0.040067,
+    "pnl_frac_of_book": 0.000755,
+    "why": "profit-exit trail breach (trail 15.11386; mark through; leftover after prior +5% half-scale)",
+    "running_pnl_frac": 0.098208,
+    "running_balance_frac": 1.098208
+  },
+  {
     "sleeve": "equities",
     "timestamp_et": "2026-09-25T19:37:00+00:00",
     "ticker": "QCOM",
