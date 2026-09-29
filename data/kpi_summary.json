@@ -1,30 +1,30 @@
 [
   {
-    "as_of": "2026-09-29T21:42:41+00:00",
+    "as_of": "2026-09-29T21:51:32+00:00",
     "sleeve": "combined",
     "day_kill_pct": null,
     "day_target_pct": null,
     "realized_pnl_frac": 0.024779,
-    "unrealized_pnl_frac": -0.027404,
+    "unrealized_pnl_frac": -0.027216,
     "kill_headroom_frac": null,
-    "running_balance_frac": 0.997375,
-    "running_pnl_frac": -0.002625,
-    "note": "crypto+equities; realized $19.82; unrealized -$21.92; book=start+realized+unrealized"
+    "running_balance_frac": 0.997564,
+    "running_pnl_frac": -0.002436,
+    "note": "crypto+equities; realized $19.82; unrealized -$21.77; book=start+realized+unrealized"
   },
   {
-    "as_of": "2026-09-29T21:42:41+00:00",
+    "as_of": "2026-09-29T21:51:32+00:00",
     "sleeve": "crypto",
     "day_kill_pct": -0.1,
     "day_target_pct": 0.025,
     "realized_pnl_frac": 0.097445,
-    "unrealized_pnl_frac": -0.06821,
-    "kill_headroom_frac": 1.292347,
-    "running_balance_frac": 1.029235,
-    "running_pnl_frac": 0.029235,
-    "note": "realized $29.23 closed exits; unrealized -$20.46 open MTM; book=start+realized+unrealized"
+    "unrealized_pnl_frac": -0.067708,
+    "kill_headroom_frac": 1.297368,
+    "running_balance_frac": 1.029737,
+    "running_pnl_frac": 0.029737,
+    "note": "realized $29.23 closed exits; unrealized -$20.31 open MTM; book=start+realized+unrealized"
   },
   {
-    "as_of": "2026-09-29T21:42:41+00:00",
+    "as_of": "2026-09-29T21:51:32+00:00",
     "sleeve": "equities",
     "day_kill_pct": -0.25,
     "day_target_pct": null,
