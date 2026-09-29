@@ -1155,6 +1155,17 @@
     "running_balance_frac": 1.098208
   },
   {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-29T17:00:50.357252+00:00",
+    "ticker": "HBAR",
+    "side": "sell",
+    "notional_frac_of_book": 0.073533,
+    "pnl_frac_of_book": -0.000766,
+    "why": "profit-exit trail breach (trail 0.11149; mark through; leftover after prior +15% scale; no profit_exits; short-hold)",
+    "running_pnl_frac": 0.097442,
+    "running_balance_frac": 1.097442
+  },
+  {
     "sleeve": "equities",
     "timestamp_et": "2026-09-25T19:37:00+00:00",
     "ticker": "QCOM",
