@@ -1197,5 +1197,16 @@
     "why": "EXIT inv broke ~194.50-195; desk cut",
     "running_pnl_frac": -0.01882,
     "running_balance_frac": 0.98118
+  },
+  {
+    "sleeve": "equities",
+    "timestamp_et": "2026-09-29T17:30:02.455858+00:00",
+    "ticker": "FLR",
+    "side": "buy",
+    "notional_frac_of_book": 0.16,
+    "pnl_frac_of_book": 0.0,
+    "why": "SWING desk run Joe; midday FLR in-zone; EPC/energy-transition continuation",
+    "running_pnl_frac": -0.01882,
+    "running_balance_frac": 0.98118
   }
 ]
