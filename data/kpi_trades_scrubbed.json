@@ -1133,6 +1133,17 @@
     "running_balance_frac": 1.095272
   },
   {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-09-29T00:55:59.926552+00:00",
+    "ticker": "LINK",
+    "side": "sell",
+    "notional_frac_of_book": 0.0415,
+    "pnl_frac_of_book": 0.002181,
+    "why": "profit-exit +5% reanalyze half-scale (+5.55% vs 14.73208; no profit_exits model; short-hold; artifact flat)",
+    "running_pnl_frac": 0.097453,
+    "running_balance_frac": 1.097453
+  },
+  {
     "sleeve": "equities",
     "timestamp_et": "2026-09-25T19:37:00+00:00",
     "ticker": "QCOM",
