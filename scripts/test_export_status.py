@@ -131,16 +131,27 @@ class TapeLedgerTests(unittest.TestCase):
         self.assertIsNotNone(last["running_pnl_frac"])
         self.assertIsNotNone(last["running_balance_frac"])
         self.assertAlmostEqual(last["running_balance_frac"], 1 + last["running_pnl_frac"], places=6)
-        # Current committed tape: last crypto fill is the ALGO buy on 2026-09-28.
-        self.assertEqual(last["ticker"], "ALGO")
-        self.assertEqual(last["side"], "buy")
-        self.assertAlmostEqual(last["running_pnl_frac"], float(export_kpi.q6(Decimal("0.090398"))), places=6)
         committed = [
             row for row in raw if row.get("sleeve") == "crypto"
         ]
         committed.sort(key=lambda row: row["timestamp_et"])
-        self.assertEqual(committed[-1]["running_pnl_frac"], last["running_pnl_frac"])
-        self.assertEqual(committed[-1]["running_balance_frac"], last["running_balance_frac"])
+        # Expected tip is the last committed crypto row by timestamp_et.
+        tip = committed[-1]
+        self.assertEqual(last["ticker"], tip["ticker"])
+        self.assertEqual(last["side"], tip["side"])
+        self.assertEqual(last["timestamp_et"], tip["timestamp_et"])
+        self.assertAlmostEqual(
+            last["running_pnl_frac"],
+            float(export_kpi.q6(Decimal(str(tip["running_pnl_frac"])))),
+            places=6,
+        )
+        self.assertAlmostEqual(
+            last["running_balance_frac"],
+            float(export_kpi.q6(Decimal(str(tip["running_balance_frac"])))),
+            places=6,
+        )
+        self.assertEqual(tip["running_pnl_frac"], last["running_pnl_frac"])
+        self.assertEqual(tip["running_balance_frac"], last["running_balance_frac"])
         long_why = "n" * 240
         kept = export_kpi.attach_running_ledger(
             [
