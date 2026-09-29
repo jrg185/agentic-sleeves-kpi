@@ -21,6 +21,10 @@ export function positionsFor(rows, sleeve) {
   return list.filter((row) => normalizeSleeve(row.sleeve) === wanted);
 }
 
+export function posOpenKey(sleeve) {
+  return `the-book-pos-open:${sleeve}`;
+}
+
 const SLEEVE_ORDER = { crypto: 0, equities: 1 };
 
 export function sortPositions(rows) {

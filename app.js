@@ -10,7 +10,7 @@ import {
   sortSleeves,
   tone,
 } from "./derive.js";
-import { positionRows, positionsFor, sortPositions } from "./positions.js";
+import { posOpenKey, positionRows, positionsFor, sortPositions } from "./positions.js";
 import { csvFilename, linkSegments, preferredWhy, tapeCsv, tapeOpenKey } from "./tape.js";
 
 const statusEl = document.querySelector("#status");
@@ -311,6 +311,25 @@ function storeTapeOpen(sleeve, open) {
   }
 }
 
+function storedPosOpen(sleeve) {
+  try {
+    const value = localStorage.getItem(posOpenKey(sleeve));
+    if (value === "closed") return false;
+    if (value === "open") return true;
+  } catch {
+    /* localStorage can throw in private mode. Default to open. */
+  }
+  return true;
+}
+
+function storePosOpen(sleeve, open) {
+  try {
+    localStorage.setItem(posOpenKey(sleeve), open ? "open" : "closed");
+  } catch {
+    /* Ignore quota and private-mode failures. The toggle still works this visit. */
+  }
+}
+
 function fillLinked(parent, text, sleeve) {
   for (const part of linkSegments(text, sleeve)) {
     if (part.type === "link") {
@@ -521,11 +540,35 @@ function formatQty(value) {
   return n.toLocaleString("en-US", { maximumFractionDigits: 8 });
 }
 
-function renderPositionTable(title, rows, { showSleeve }) {
+function renderPositionTable(title, rows, { showSleeve, sleeve }) {
   const section = el("section", "pos");
-  section.append(el("h3", null, title));
+  const heading = el("h3");
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "tape-toggle";
+  const panelId = `pos-panel-${sleeve}`;
+  toggle.setAttribute("aria-controls", panelId);
+  const open = storedPosOpen(sleeve);
+  toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  toggle.append(document.createTextNode(title));
+  const chevron = el("span", "chevron");
+  chevron.setAttribute("aria-hidden", "true");
+  toggle.append(chevron);
+  heading.append(toggle);
+
+  const panel = el("div", "pos-panel");
+  panel.id = panelId;
+  panel.hidden = !open;
+  toggle.addEventListener("click", () => {
+    const next = toggle.getAttribute("aria-expanded") !== "true";
+    toggle.setAttribute("aria-expanded", next ? "true" : "false");
+    panel.hidden = !next;
+    storePosOpen(sleeve, next);
+  });
+  section.append(heading);
   if (!rows.length) {
-    section.append(el("p", "empty", "No open positions."));
+    panel.append(el("p", "empty", "No open positions."));
+    section.append(panel);
     return section;
   }
   const wrap = el("div", "table-wrap");
@@ -571,7 +614,8 @@ function renderPositionTable(title, rows, { showSleeve }) {
   }
   table.append(thead, tbody);
   wrap.append(table);
-  section.append(wrap);
+  panel.append(wrap);
+  section.append(panel);
   return section;
 }
 
@@ -584,9 +628,9 @@ function renderPositions(payload) {
   }
   const rows = sortPositions(positionRows(payload));
   positionsEl.append(
-    renderPositionTable("Combined", positionsFor(rows, "combined"), { showSleeve: true }),
-    renderPositionTable("Crypto", positionsFor(rows, "crypto"), { showSleeve: false }),
-    renderPositionTable("Equities", positionsFor(rows, "equities"), { showSleeve: false })
+    renderPositionTable("Combined", positionsFor(rows, "combined"), { showSleeve: true, sleeve: "combined" }),
+    renderPositionTable("Crypto", positionsFor(rows, "crypto"), { showSleeve: false, sleeve: "crypto" }),
+    renderPositionTable("Equities", positionsFor(rows, "equities"), { showSleeve: false, sleeve: "equities" })
   );
 }
 

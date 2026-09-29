@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { buildChart, filterRows, sampleAt } from "../curves.js";
-import { positionsFor, positionRows, sortPositions } from "../positions.js";
-import { pullUrl } from "../tape.js";
+import { posOpenKey, positionsFor, positionRows, sortPositions } from "../positions.js";
+import { pullUrl, tapeOpenKey } from "../tape.js";
 
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
@@ -85,4 +85,13 @@ test("positions group by sleeve and a flat sleeve stays empty", () => {
   assert.equal(positionsFor(rows, "equities")[0].ticker, "QCOM");
   assert.equal(positionsFor(rows, "combined").length, 2);
   assert.equal(positionsFor([], "equities").length, 0);
+});
+
+test("position open keys are per sleeve and do not reuse tape keys", () => {
+  assert.equal(posOpenKey("combined"), "the-book-pos-open:combined");
+  assert.equal(posOpenKey("crypto"), "the-book-pos-open:crypto");
+  assert.equal(posOpenKey("equities"), "the-book-pos-open:equities");
+  assert.notEqual(posOpenKey("crypto"), posOpenKey("equities"));
+  assert.notEqual(posOpenKey("crypto"), tapeOpenKey("crypto"));
+  assert.notEqual(posOpenKey("equities"), tapeOpenKey("equities"));
 });
