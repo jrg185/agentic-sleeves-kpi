@@ -1219,5 +1219,16 @@
     "why": "SWING desk morning; AIG leadership/bounce; EH limit fill",
     "running_pnl_frac": -0.01882,
     "running_balance_frac": 0.98118
+  },
+  {
+    "sleeve": "equities",
+    "timestamp_et": "2026-09-30T17:04:07.660415+00:00",
+    "ticker": "BA",
+    "side": "buy",
+    "notional_frac_of_book": 0.19,
+    "pnl_frac_of_book": 0.0,
+    "why": "SWING midday-tape; BA pullback after F/A-XX gap fade into/near zone; inv 185.50",
+    "running_pnl_frac": -0.01882,
+    "running_balance_frac": 0.98118
   }
 ]
