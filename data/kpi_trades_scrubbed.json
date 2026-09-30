@@ -1241,5 +1241,16 @@
     "why": "preclose inv break: sustained under $48.90",
     "running_pnl_frac": -0.024022,
     "running_balance_frac": 0.975978
+  },
+  {
+    "sleeve": "equities",
+    "timestamp_et": "2026-09-30T19:24:16.305401+00:00",
+    "ticker": "HPE",
+    "side": "buy",
+    "notional_frac_of_book": 0.2598,
+    "pnl_frac_of_book": 0.0,
+    "why": "preclose AI infra swing: Vultr $1.2B order + networking outlook raise; pullback off HOD",
+    "running_pnl_frac": -0.024022,
+    "running_balance_frac": 0.975978
   }
 ]
