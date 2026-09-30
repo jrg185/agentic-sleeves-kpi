@@ -1,38 +1,38 @@
 [
   {
-    "as_of": "2026-09-30T17:43:03+00:00",
+    "as_of": "2026-09-30T17:53:16+00:00",
     "sleeve": "combined",
     "day_kill_pct": null,
     "day_target_pct": null,
     "realized_pnl_frac": 0.024779,
-    "unrealized_pnl_frac": -0.025946,
+    "unrealized_pnl_frac": -0.02385,
     "kill_headroom_frac": null,
-    "running_balance_frac": 0.998833,
-    "running_pnl_frac": -0.001167,
-    "note": "crypto+equities; realized $19.82; unrealized -$20.76; book=start+realized+unrealized"
+    "running_balance_frac": 1.00093,
+    "running_pnl_frac": 0.00093,
+    "note": "crypto+equities; realized $19.82; unrealized -$19.08; book=start+realized+unrealized"
   },
   {
-    "as_of": "2026-09-30T17:43:03+00:00",
+    "as_of": "2026-09-30T17:53:16+00:00",
     "sleeve": "crypto",
     "day_kill_pct": -0.1,
     "day_target_pct": 0.025,
     "realized_pnl_frac": 0.097445,
-    "unrealized_pnl_frac": -0.060913,
-    "kill_headroom_frac": 1.365315,
-    "running_balance_frac": 1.036532,
-    "running_pnl_frac": 0.036532,
-    "note": "realized $29.23 closed exits; unrealized -$18.27 open MTM; book=start+realized+unrealized"
+    "unrealized_pnl_frac": -0.057998,
+    "kill_headroom_frac": 1.394466,
+    "running_balance_frac": 1.039447,
+    "running_pnl_frac": 0.039447,
+    "note": "realized $29.23 closed exits; unrealized -$17.40 open MTM; book=start+realized+unrealized"
   },
   {
-    "as_of": "2026-09-30T17:43:03+00:00",
+    "as_of": "2026-09-30T17:53:16+00:00",
     "sleeve": "equities",
     "day_kill_pct": -0.25,
     "day_target_pct": null,
     "realized_pnl_frac": -0.01882,
-    "unrealized_pnl_frac": -0.004966,
-    "kill_headroom_frac": 0.904856,
-    "running_balance_frac": 0.976214,
-    "running_pnl_frac": -0.023786,
-    "note": "realized -$9.41 closed exits; unrealized -$2.48 open MTM; book=start+realized+unrealized"
+    "unrealized_pnl_frac": -0.003361,
+    "kill_headroom_frac": 0.911278,
+    "running_balance_frac": 0.977819,
+    "running_pnl_frac": -0.022181,
+    "note": "realized -$9.41 closed exits; unrealized -$1.68 open MTM; book=start+realized+unrealized"
   }
 ]
