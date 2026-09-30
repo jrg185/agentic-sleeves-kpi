@@ -1,5 +1,5 @@
 {
-  "as_of": "2026-09-30T12:39:04Z",
+  "as_of": "2026-09-30T13:05:35Z",
   "positions": [
     {
       "sleeve": "crypto",
@@ -7,8 +7,8 @@
       "side": "long",
       "qty": "126.3",
       "avg": "0.13446274",
-      "mark": "0.12723",
-      "unrealized_pnl_frac": -0.003045
+      "mark": "0.12743",
+      "unrealized_pnl_frac": -0.002961
     },
     {
       "sleeve": "crypto",
@@ -16,8 +16,8 @@
       "side": "long",
       "qty": "4.010",
       "avg": "11.1328",
-      "mark": "11.283",
-      "unrealized_pnl_frac": 0.002008
+      "mark": "11.307",
+      "unrealized_pnl_frac": 0.002328
     },
     {
       "sleeve": "crypto",
@@ -25,8 +25,8 @@
       "side": "long",
       "qty": "0.97101",
       "avg": "24.83061338194251346536080988",
-      "mark": "25.43",
-      "unrealized_pnl_frac": 0.00194
+      "mark": "25.35",
+      "unrealized_pnl_frac": 0.001681
     },
     {
       "sleeve": "crypto",
@@ -34,8 +34,8 @@
       "side": "long",
       "qty": "63.89",
       "avg": "0.35013",
-      "mark": "0.4044",
-      "unrealized_pnl_frac": 0.011558
+      "mark": "0.3977",
+      "unrealized_pnl_frac": 0.010131
     },
     {
       "sleeve": "crypto",
@@ -43,8 +43,8 @@
       "side": "long",
       "qty": "14.081",
       "avg": "1.2623",
-      "mark": "1.2437",
-      "unrealized_pnl_frac": -0.000873
+      "mark": "1.2471",
+      "unrealized_pnl_frac": -0.000713
     },
     {
       "sleeve": "crypto",
@@ -52,8 +52,8 @@
       "side": "long",
       "qty": "1243.8",
       "avg": "0.03265715232579119625350618089",
-      "mark": "0.02958",
-      "unrealized_pnl_frac": -0.012758
+      "mark": "0.02988",
+      "unrealized_pnl_frac": -0.011514
     },
     {
       "sleeve": "crypto",
@@ -61,8 +61,8 @@
       "side": "long",
       "qty": "232.1",
       "avg": "0.1808699708611375913568477915",
-      "mark": "0.16864",
-      "unrealized_pnl_frac": -0.009462
+      "mark": "0.16903",
+      "unrealized_pnl_frac": -0.00916
     },
     {
       "sleeve": "crypto",
@@ -70,8 +70,8 @@
       "side": "long",
       "qty": "4.93",
       "avg": "5.49365",
-      "mark": "5.3962",
-      "unrealized_pnl_frac": -0.001601
+      "mark": "5.3757",
+      "unrealized_pnl_frac": -0.001938
     },
     {
       "sleeve": "crypto",
@@ -79,8 +79,8 @@
       "side": "long",
       "qty": "118.24",
       "avg": "0.147182",
-      "mark": "0.13476",
-      "unrealized_pnl_frac": -0.004896
+      "mark": "0.13507",
+      "unrealized_pnl_frac": -0.004774
     },
     {
       "sleeve": "crypto",
@@ -88,8 +88,8 @@
       "side": "long",
       "qty": "10.32",
       "avg": "1.72896",
-      "mark": "1.612",
-      "unrealized_pnl_frac": -0.004023
+      "mark": "1.6278",
+      "unrealized_pnl_frac": -0.00348
     },
     {
       "sleeve": "crypto",
@@ -97,8 +97,8 @@
       "side": "long",
       "qty": "355.2",
       "avg": "0.083497",
-      "mark": "0.0793",
-      "unrealized_pnl_frac": -0.004969
+      "mark": "0.07955",
+      "unrealized_pnl_frac": -0.004673
     },
     {
       "sleeve": "crypto",
@@ -106,8 +106,8 @@
       "side": "long",
       "qty": "0.1031",
       "avg": "165.5018272235910692827353604",
-      "mark": "312.81",
-      "unrealized_pnl_frac": 0.050625
+      "mark": "305.26",
+      "unrealized_pnl_frac": 0.04803
     },
     {
       "sleeve": "crypto",
@@ -115,8 +115,8 @@
       "side": "long",
       "qty": "9.484",
       "avg": "2.09152",
-      "mark": "1.9685",
-      "unrealized_pnl_frac": -0.003889
+      "mark": "1.9839",
+      "unrealized_pnl_frac": -0.003402
     },
     {
       "sleeve": "crypto",
@@ -124,8 +124,8 @@
       "side": "long",
       "qty": "649.72",
       "avg": "0.07892353744522402372803524244",
-      "mark": "0.07455",
-      "unrealized_pnl_frac": -0.009472
+      "mark": "0.07494",
+      "unrealized_pnl_frac": -0.008627
     },
     {
       "sleeve": "crypto",
@@ -133,8 +133,8 @@
       "side": "long",
       "qty": "17.581",
       "avg": "1.255736766590510599861856437",
-      "mark": "1.1762",
-      "unrealized_pnl_frac": -0.004661
+      "mark": "1.1968",
+      "unrealized_pnl_frac": -0.003454
     },
     {
       "sleeve": "crypto",
@@ -142,8 +142,8 @@
       "side": "long",
       "qty": "1.9159",
       "avg": "10.076955",
-      "mark": "9.0204",
-      "unrealized_pnl_frac": -0.006748
+      "mark": "9.1673",
+      "unrealized_pnl_frac": -0.005809
     },
     {
       "sleeve": "crypto",
@@ -151,8 +151,8 @@
       "side": "long",
       "qty": "1058.0",
       "avg": "0.01329727599243856332703213610",
-      "mark": "0.013707",
-      "unrealized_pnl_frac": 0.001445
+      "mark": "0.013754",
+      "unrealized_pnl_frac": 0.001611
     },
     {
       "sleeve": "crypto",
@@ -160,8 +160,8 @@
       "side": "long",
       "qty": "10342.0",
       "avg": "0.00524921",
-      "mark": "0.004779",
-      "unrealized_pnl_frac": -0.01621
+      "mark": "0.004783",
+      "unrealized_pnl_frac": -0.016072
     },
     {
       "sleeve": "crypto",
@@ -169,8 +169,8 @@
       "side": "long",
       "qty": "110.88",
       "avg": "0.227944",
-      "mark": "0.230549",
-      "unrealized_pnl_frac": 0.000963
+      "mark": "0.230152",
+      "unrealized_pnl_frac": 0.000816
     },
     {
       "sleeve": "crypto",
@@ -178,8 +178,17 @@
       "side": "long",
       "qty": "0.01632",
       "avg": "1683.01",
-      "mark": "1454.52",
-      "unrealized_pnl_frac": -0.01243
+      "mark": "1473.24",
+      "unrealized_pnl_frac": -0.011411
+    },
+    {
+      "sleeve": "equities",
+      "ticker": "AIG",
+      "side": "long",
+      "qty": "1",
+      "avg": "75.88",
+      "mark": "75.27",
+      "unrealized_pnl_frac": -0.00122
     },
     {
       "sleeve": "equities",
