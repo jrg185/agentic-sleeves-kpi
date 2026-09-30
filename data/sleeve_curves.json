@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-30T06:40:00Z",
+  "updated_at": "2026-09-30T07:11:02Z",
   "series": [
     {
       "sleeve": "combined",
@@ -4924,6 +4924,30 @@
     {
       "sleeve": "equities",
       "as_of": "2026-09-30T06:39:59+00:00",
+      "realized_pnl_frac": -0.01882,
+      "unrealized_pnl_frac": -0.00292,
+      "running_pnl_frac": -0.02174,
+      "running_balance_frac": 0.97826
+    },
+    {
+      "sleeve": "combined",
+      "as_of": "2026-09-30T07:11:01+00:00",
+      "realized_pnl_frac": 0.024779,
+      "unrealized_pnl_frac": -0.034578,
+      "running_pnl_frac": -0.009799,
+      "running_balance_frac": 0.990201
+    },
+    {
+      "sleeve": "crypto",
+      "as_of": "2026-09-30T07:11:01+00:00",
+      "realized_pnl_frac": 0.097445,
+      "unrealized_pnl_frac": -0.08734,
+      "running_pnl_frac": 0.010104,
+      "running_balance_frac": 1.010104
+    },
+    {
+      "sleeve": "equities",
+      "as_of": "2026-09-30T07:11:01+00:00",
       "realized_pnl_frac": -0.01882,
       "unrealized_pnl_frac": -0.00292,
       "running_pnl_frac": -0.02174,
