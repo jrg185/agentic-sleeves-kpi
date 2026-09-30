@@ -194,3 +194,50 @@ export function tone(value) {
   if (value == null || value === 0) return "flat";
   return value > 0 ? "up" : "down";
 }
+
+function exitPnlFrac(trade) {
+  if (!trade) return null;
+  const primary = num(trade.pnl_frac_of_book);
+  if (primary != null) return primary;
+  return num(trade.pnl_frac);
+}
+
+// Closed exits only: sell fills with a finite pnl fraction.
+// Flat (0) exits are excluded from wins, losses, and the denominator.
+// Combined is crypto sells plus equities sells, not a third tape.
+export function winStats(trades, sleeve) {
+  const rows = Array.isArray(trades) ? trades : [];
+  const wanted = sleeve === "combined" ? ["crypto", "equities"] : [sleeve];
+  let wins = 0;
+  let losses = 0;
+  for (const trade of rows) {
+    if (!wanted.includes(sleeveKey(trade))) continue;
+    if (String(trade?.side || "").trim().toLowerCase() !== "sell") continue;
+    const frac = exitPnlFrac(trade);
+    if (frac == null || frac === 0) continue;
+    if (frac > 0) wins += 1;
+    else losses += 1;
+  }
+  const decided = wins + losses;
+  return {
+    wins,
+    losses,
+    rate: decided === 0 ? null : wins / decided,
+  };
+}
+
+export function formatWinPct(rate) {
+  return formatPct(rate, { digits: 0 });
+}
+
+export function formatWinRecord(stats) {
+  const wins = stats?.wins || 0;
+  const losses = stats?.losses || 0;
+  return `${wins}\u2013${losses}`;
+}
+
+export function winTone(stats) {
+  if (!stats || stats.rate == null) return tone(null);
+  if (stats.wins === stats.losses) return tone(0);
+  return tone(stats.wins - stats.losses);
+}

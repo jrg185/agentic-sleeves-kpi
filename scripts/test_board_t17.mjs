@@ -3,6 +3,12 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { buildChart, filterRows, sampleAt } from "../curves.js";
+import {
+  formatWinPct,
+  formatWinRecord,
+  winStats,
+  winTone,
+} from "../derive.js";
 import { posOpenKey, positionsFor, positionRows, sortPositions } from "../positions.js";
 import { pullUrl, tapeOpenKey } from "../tape.js";
 
@@ -85,6 +91,80 @@ test("positions group by sleeve and a flat sleeve stays empty", () => {
   assert.equal(positionsFor(rows, "equities")[0].ticker, "QCOM");
   assert.equal(positionsFor(rows, "combined").length, 2);
   assert.equal(positionsFor([], "equities").length, 0);
+});
+
+test("win % counts sell exits, drops flats, and combines sleeves", () => {
+  const trades = [
+    { sleeve: "crypto", side: "buy", pnl_frac_of_book: 0.2 },
+    { sleeve: "crypto", side: "SELL", pnl_frac_of_book: 0.01 },
+    { sleeve: "Crypto", side: "sell", pnl_frac: -0.02 },
+    { sleeve: "crypto", side: "sell", pnl_frac_of_book: 0, pnl_frac: 0.5 },
+    { sleeve: "crypto", side: "sell", pnl_frac_of_book: "nope", pnl_frac: 0.03 },
+    { sleeve: "crypto", side: "sell", pnl_frac_of_book: null },
+    { sleeve: "crypto", side: "sell", pnl_frac_of_book: Number.POSITIVE_INFINITY },
+    { sleeve: "crypto", side: "sell", pnl_frac_of_book: 0.04 },
+    { sleeve: "equities", side: "sell", pnl_frac_of_book: -0.05 },
+    { sleeve: "equities", side: "buy", pnl_frac_of_book: 0.9 },
+    { sleeve: "equities", side: "sell", pnl_frac_of_book: 0 },
+    { sleeve: "other", side: "sell", pnl_frac_of_book: 0.5 },
+  ];
+
+  const crypto = winStats(trades, "crypto");
+  assert.deepEqual(crypto, { wins: 3, losses: 1, rate: 0.75 });
+  assert.equal(formatWinPct(crypto.rate), "75%");
+  assert.equal(formatWinRecord(crypto), "3\u20131");
+  assert.equal(winTone(crypto), "up");
+
+  const equities = winStats(trades, "equities");
+  assert.deepEqual(equities, { wins: 0, losses: 1, rate: 0 });
+  assert.equal(formatWinPct(equities.rate), "0%");
+  assert.equal(formatWinRecord(equities), "0\u20131");
+  assert.equal(winTone(equities), "down");
+
+  const combined = winStats(trades, "combined");
+  assert.equal(combined.wins, crypto.wins + equities.wins);
+  assert.equal(combined.losses, crypto.losses + equities.losses);
+  assert.equal(combined.rate, 3 / 5);
+  assert.equal(formatWinPct(combined.rate), "60%");
+  assert.equal(formatWinRecord(combined), "3\u20132");
+  assert.equal(winTone(combined), "up");
+
+  const even = winStats(
+    [
+      { sleeve: "crypto", side: "sell", pnl_frac_of_book: 0.1 },
+      { sleeve: "crypto", side: "sell", pnl_frac_of_book: -0.1 },
+      { sleeve: "crypto", side: "sell", pnl_frac_of_book: 0 },
+    ],
+    "crypto"
+  );
+  assert.equal(even.rate, 0.5);
+  assert.equal(formatWinPct(even.rate), "50%");
+  assert.equal(winTone(even), "flat");
+
+  const none = winStats([{ sleeve: "crypto", side: "buy", pnl_frac_of_book: 0.2 }], "crypto");
+  assert.deepEqual(none, { wins: 0, losses: 0, rate: null });
+  assert.equal(formatWinPct(none.rate), "\u2014");
+  assert.equal(formatWinRecord(none), "0\u20130");
+  assert.equal(winTone(none), "flat");
+  assert.equal(winTone(null), "flat");
+});
+
+test("scrubbed tape yields a win % for each sleeve", () => {
+  const trades = JSON.parse(readFileSync(new URL("../data/kpi_trades_scrubbed.json", import.meta.url), "utf8"));
+  const crypto = winStats(trades, "crypto");
+  const equities = winStats(trades, "equities");
+  const combined = winStats(trades, "combined");
+  assert.equal(combined.wins, crypto.wins + equities.wins);
+  assert.equal(combined.losses, crypto.losses + equities.losses);
+  for (const stats of [crypto, equities, combined]) {
+    const label = formatWinPct(stats.rate);
+    assert.match(label, /^(?:\u2014|\d+%)$/);
+    assert.match(formatWinRecord(stats), /^\d+\u2013\d+$/);
+    if (stats.rate == null) assert.equal(winTone(stats), "flat");
+    else if (stats.rate > 0.5) assert.equal(winTone(stats), "up");
+    else if (stats.rate < 0.5) assert.equal(winTone(stats), "down");
+    else assert.equal(winTone(stats), "flat");
+  }
 });
 
 test("position open keys are per sleeve and do not reuse tape keys", () => {
