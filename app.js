@@ -3,12 +3,16 @@ import {
   deriveSleeve,
   formatPct,
   formatUsd,
+  formatWinPct,
+  formatWinRecord,
   headroomFill,
   labelFor,
   money,
   sleeveKey,
   sortSleeves,
   tone,
+  winStats,
+  winTone,
 } from "./derive.js";
 import { posOpenKey, positionRows, positionsFor, sortPositions } from "./positions.js";
 import { csvFilename, linkSegments, preferredWhy, tapeCsv, tapeOpenKey } from "./tape.js";
@@ -201,7 +205,7 @@ function splitPnl(label, dollars, frac, fine) {
   return node;
 }
 
-function renderSleeve(derived, { hero = false } = {}) {
+function renderSleeve(derived, { hero = false, trades = [] } = {}) {
   const card = el("article", `sleeve ${derived.sleeve}${hero ? " hero" : ""}`);
   const head = el("header", "sleeve-head");
   head.append(el("h2", null, derived.label));
@@ -264,6 +268,11 @@ function renderSleeve(derived, { hero = false } = {}) {
   target.querySelector(".v").replaceChildren(pair(bits[0], bits[1] || ""));
   if (derived.sleeve === "crypto") target.append(el("p", "fine", "Realized only"));
   grid.append(target);
+
+  const stats = winStats(trades, derived.sleeve);
+  const win = metric("Win %", formatWinPct(stats.rate), winTone(stats));
+  win.append(el("p", "fine", formatWinRecord(stats)));
+  grid.append(win);
 
   card.append(grid);
   if (derived.note) card.append(el("p", "note", String(derived.note)));
@@ -493,13 +502,14 @@ function renderTape(sleeve, trades) {
 
 function render(summaryRows, tradeRows, meta) {
   const sleeves = sortSleeves(Array.isArray(summaryRows) ? summaryRows : [], undefined);
+  const trades = Array.isArray(tradeRows) ? tradeRows : [];
   renderStatus(meta || {}, latestStamp(sleeves.map((row) => row.asOf)));
   boardEl.replaceChildren();
   const combined = sleeves.find((row) => row.sleeve === "combined");
   const rest = sleeves.filter((row) => row.sleeve !== "combined");
-  if (combined) boardEl.append(renderSleeve(combined, { hero: true }));
+  if (combined) boardEl.append(renderSleeve(combined, { hero: true, trades }));
   const grid = el("div", "sleeve-grid");
-  for (const row of rest) grid.append(renderSleeve(row));
+  for (const row of rest) grid.append(renderSleeve(row, { trades }));
   if (!combined && !rest.length) {
     boardEl.append(el("p", "empty", "kpi_summary has no sleeve rows."));
   } else {
