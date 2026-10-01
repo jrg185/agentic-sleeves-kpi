@@ -20,7 +20,22 @@ import {
   winTone,
 } from "./derive.js";
 import { posOpenKey, positionRows, positionsFor, sortPositions } from "./positions.js";
-import { csvFilename, linkSegments, preferredWhy, tapeCsv, tapeOpenKey } from "./tape.js";
+import {
+  TAPE_MONTH_ALL,
+  csvFilename,
+  etMonthLabel,
+  fillCountText,
+  fillStamp,
+  filterTapeByMonth,
+  linkSegments,
+  preferredWhy,
+  rememberTapeMonth,
+  storedTapeMonth,
+  tapeCsv,
+  tapeMonthOptions,
+  tapeMonthStorageKey,
+  tapeOpenKey,
+} from "./tape.js";
 
 const statusEl = document.querySelector("#status");
 const boardEl = document.querySelector("#board");
@@ -378,7 +393,7 @@ function feeText(seed, frac) {
 }
 
 function tradeStamp(trade) {
-  return trade?.timestamp_et || trade?.ts || "";
+  return fillStamp(trade);
 }
 
 function fillLinked(parent, text, sleeve) {
@@ -456,6 +471,26 @@ function downloadCsv(filename, text) {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
+function appendTapeRow(tbody, sleeve, trade) {
+  const fields = tapeFields(sleeve, trade);
+  const tr = el("tr");
+  const side = el("td");
+  const pill = el("span", `pill ${trade.side || ""}`, fields.side);
+  side.append(pill);
+  tr.append(
+    el("td", null, fields.time),
+    el("td", "ticker", fields.ticker),
+    side,
+    el("td", "num", fields.notional),
+    el("td", "num", fields.fee),
+    el("td", `num ${tone(fields.pnl)}`, fields.tradePnl),
+    el("td", `num ${tone(fields.runningPnlValue)}`, fields.runningPnl),
+    el("td", `num ${tone(fields.runningBalanceValue)}`, fields.runningBalance),
+    renderWhyCell(fields, sleeve)
+  );
+  tbody.append(tr);
+}
+
 function renderTape(sleeve, trades) {
   const section = el("section", `tape ${sleeve}`);
   const head = el("div", "tape-head");
@@ -470,18 +505,55 @@ function renderTape(sleeve, trades) {
     defaultOpen: true,
   });
 
+  const months = tapeMonthOptions(trades, tradeStamp);
+  const monthKey = tapeMonthStorageKey(sleeve);
+  let month = storedTapeMonth(localStorage, monthKey, months);
+  const tools = el("div", "tape-tools");
+
+  if (months.length) {
+    const monthLabel = el("label", "tape-month");
+    monthLabel.htmlFor = `tape-month-${sleeve}`;
+    monthLabel.append(document.createTextNode("Month"));
+    const select = document.createElement("select");
+    select.id = `tape-month-${sleeve}`;
+    const allOption = document.createElement("option");
+    allOption.value = TAPE_MONTH_ALL;
+    allOption.textContent = "All";
+    select.append(allOption);
+    for (const key of months) {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = etMonthLabel(key);
+      select.append(option);
+    }
+    select.value = month;
+    select.addEventListener("change", () => {
+      month = select.value;
+      rememberTapeMonth(localStorage, monthKey, month);
+      paintRows();
+    });
+    monthLabel.append(select);
+    tools.append(monthLabel);
+  }
+
+  const count = el("p", "fine tape-count");
+  count.id = `tape-count-${sleeve}`;
+  if (trades.length) {
+    count.setAttribute("aria-live", "polite");
+    tools.append(count);
+  }
+
   const exportBtn = document.createElement("button");
   exportBtn.type = "button";
   exportBtn.className = "tape-export";
   exportBtn.textContent = "Download CSV";
   exportBtn.setAttribute("aria-label", `Download ${labelFor(sleeve)} CSV`);
-
   exportBtn.addEventListener("click", () => {
-    const rows = trades.map((trade) => tapeFields(sleeve, trade));
+    const rows = filterTapeByMonth(trades, month, tradeStamp).map((trade) => tapeFields(sleeve, trade));
     downloadCsv(csvFilename(sleeve), tapeCsv(rows));
   });
-
-  head.append(heading, exportBtn);
+  tools.append(exportBtn);
+  head.append(heading, tools);
   section.append(head);
   if (sleeve === "equities") {
     section.append(
@@ -515,25 +587,23 @@ function renderTape(sleeve, trades) {
   }
   thead.append(headRow);
   const tbody = el("tbody");
-  for (const trade of trades) {
-    const fields = tapeFields(sleeve, trade);
-    const tr = el("tr");
-    const side = el("td");
-    const pill = el("span", `pill ${trade.side || ""}`, fields.side);
-    side.append(pill);
-    tr.append(
-      el("td", null, fields.time),
-      el("td", "ticker", fields.ticker),
-      side,
-      el("td", "num", fields.notional),
-      el("td", "num", fields.fee),
-      el("td", `num ${tone(fields.pnl)}`, fields.tradePnl),
-      el("td", `num ${tone(fields.runningPnlValue)}`, fields.runningPnl),
-      el("td", `num ${tone(fields.runningBalanceValue)}`, fields.runningBalance),
-      renderWhyCell(fields, sleeve)
-    );
-    tbody.append(tr);
+
+  function paintRows() {
+    const visible = filterTapeByMonth(trades, month, tradeStamp);
+    count.textContent = fillCountText(visible.length, trades.length);
+    tbody.replaceChildren();
+    if (!visible.length) {
+      const tr = el("tr");
+      const td = el("td", null, "No fills in this month.");
+      td.colSpan = 9;
+      tr.append(td);
+      tbody.append(tr);
+      return;
+    }
+    for (const trade of visible) appendTapeRow(tbody, sleeve, trade);
   }
+
+  paintRows();
   table.append(caption, thead, tbody);
   wrap.append(table);
   panel.append(wrap, note);

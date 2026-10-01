@@ -94,6 +94,82 @@ export function tapeOpenKey(sleeve) {
   return `the-book-tape-open:${sleeve}`;
 }
 
+export const TAPE_MONTH_ALL = "all";
+
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+export function fillStamp(trade) {
+  return trade?.timestamp_et || trade?.ts || "";
+}
+
+export function etMonthKey(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  if (!year || !month) return "";
+  return `${year}-${month}`;
+}
+
+export function etMonthLabel(key) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(key || ""));
+  if (!match) return "";
+  const index = Number(match[2]) - 1;
+  if (index < 0 || index > 11) return "";
+  return `${MONTH_SHORT[index]} ${match[1]}`;
+}
+
+export function tapeMonthOptions(rows, stampOf = fillStamp) {
+  const keys = new Set();
+  for (const row of rows || []) {
+    const key = etMonthKey(stampOf(row));
+    if (key) keys.add(key);
+  }
+  return [...keys].sort();
+}
+
+export function filterTapeByMonth(rows, monthKey, stampOf = fillStamp) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (!monthKey || monthKey === TAPE_MONTH_ALL) return list.slice();
+  return list.filter((row) => etMonthKey(stampOf(row)) === monthKey);
+}
+
+export function fillCountText(visible, total) {
+  const shown = Math.max(0, Number(visible) || 0);
+  const all = Math.max(0, Number(total) || 0);
+  if (shown === all) return all === 1 ? "1 fill" : `${all} fills`;
+  const noun = all === 1 ? "fill" : "fills";
+  return `${shown} of ${all} ${noun}`;
+}
+
+export function tapeMonthStorageKey(sleeve) {
+  return `the-book-tape-month:${sleeve}`;
+}
+
+export function storedTapeMonth(storage, key, options) {
+  const allowed = new Set([TAPE_MONTH_ALL, ...(options || [])]);
+  try {
+    const value = storage.getItem(key);
+    if (allowed.has(value)) return value;
+  } catch {
+    /* localStorage can throw in private mode. */
+  }
+  return TAPE_MONTH_ALL;
+}
+
+export function rememberTapeMonth(storage, key, value) {
+  try {
+    storage.setItem(key, value || TAPE_MONTH_ALL);
+  } catch {
+    /* Ignore quota and private-mode failures. The filter still works this visit. */
+  }
+}
+
 export function csvFilename(sleeve) {
   const key = String(sleeve || "book")
     .trim()

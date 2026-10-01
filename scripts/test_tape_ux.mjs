@@ -1,13 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { readFileSync } from "node:fs";
+
 import {
+  TAPE_MONTH_ALL,
   agentUrl,
   csvFilename,
+  etMonthKey,
+  etMonthLabel,
+  fillCountText,
+  fillStamp,
+  filterTapeByMonth,
   linkSegments,
   preferredWhy,
   pullUrl,
+  rememberTapeMonth,
+  storedTapeMonth,
   tapeCsv,
+  tapeMonthOptions,
+  tapeMonthStorageKey,
   tapeOpenKey,
 } from "../tape.js";
 
@@ -126,4 +138,118 @@ test("csv uses human-preferred why and escapes commas and quotes", () => {
   assert.match(lines[1], /"trail breach \(bc-b76ce034 \/ PR#50\), ""full exit"""/);
   assert.match(lines[2], /,sync order$/);
   assert.doesNotMatch(lines[2], /RH Agentic sync order/);
+});
+
+function memoryStorage(initial = {}) {
+  const data = { ...initial };
+  return {
+    getItem(key) {
+      return Object.prototype.hasOwnProperty.call(data, key) ? data[key] : null;
+    },
+    setItem(key, value) {
+      data[key] = String(value);
+    },
+  };
+}
+
+test("ET month keys follow America/New_York, including the midnight boundary", () => {
+  assert.equal(etMonthKey("2026-09-26T16:36:50+00:00"), "2026-09");
+  assert.equal(etMonthKey("2026-10-01T03:59:59Z"), "2026-09");
+  assert.equal(etMonthKey("2026-10-01T04:00:00Z"), "2026-10");
+  assert.equal(etMonthKey("2026-12-01T04:30:00Z"), "2026-11");
+  assert.equal(etMonthKey("not-a-time"), "");
+  assert.equal(etMonthKey(""), "");
+  assert.equal(etMonthLabel("2026-09"), "Sep 2026");
+  assert.equal(etMonthLabel("2026-10"), "Oct 2026");
+  assert.equal(etMonthLabel("2026-13"), "");
+  assert.equal(etMonthLabel("all"), "");
+});
+
+test("month options are distinct ET months, oldest first, and All keeps every row", () => {
+  const rows = [
+    { timestamp_et: "2026-10-01T12:48:32Z", ticker: "ORCA" },
+    { timestamp_et: "2026-10-01T03:48:01Z", ticker: "OP" },
+    { ts: "2026-09-26T16:36:50Z", ticker: "AVAX" },
+    { timestamp_et: "nope", ticker: "BAD" },
+    { ticker: "NONE" },
+  ];
+  assert.deepEqual(tapeMonthOptions(rows), ["2026-09", "2026-10"]);
+  assert.equal(etMonthKey(fillStamp(rows[1])), "2026-09");
+  assert.equal(etMonthKey(fillStamp(rows[0])), "2026-10");
+
+  const all = filterTapeByMonth(rows, TAPE_MONTH_ALL);
+  assert.equal(all.length, rows.length);
+  assert.notEqual(all, rows);
+  assert.deepEqual(
+    filterTapeByMonth(rows, "2026-09").map((row) => row.ticker),
+    ["OP", "AVAX"]
+  );
+  assert.deepEqual(
+    filterTapeByMonth(rows, "2026-10").map((row) => row.ticker),
+    ["ORCA"]
+  );
+  assert.equal(filterTapeByMonth(rows, "2099-01").length, 0);
+});
+
+test("fill count names the visible rows and the total only when filtered", () => {
+  assert.equal(fillCountText(117, 117), "117 fills");
+  assert.equal(fillCountText(1, 1), "1 fill");
+  assert.equal(fillCountText(0, 0), "0 fills");
+  assert.equal(fillCountText(12, 117), "12 of 117 fills");
+  assert.equal(fillCountText(1, 117), "1 of 117 fills");
+  assert.equal(fillCountText(0, 117), "0 of 117 fills");
+});
+
+test("month filter memory is per sleeve and first visit is All", () => {
+  assert.equal(tapeMonthStorageKey("crypto"), "the-book-tape-month:crypto");
+  assert.equal(tapeMonthStorageKey("equities"), "the-book-tape-month:equities");
+  assert.notEqual(tapeMonthStorageKey("crypto"), tapeOpenKey("crypto"));
+  assert.notEqual(tapeMonthStorageKey("crypto"), tapeMonthStorageKey("equities"));
+
+  const months = ["2026-09", "2026-10"];
+  const storage = memoryStorage();
+  assert.equal(storedTapeMonth(storage, tapeMonthStorageKey("crypto"), months), TAPE_MONTH_ALL);
+
+  rememberTapeMonth(storage, tapeMonthStorageKey("crypto"), "2026-09");
+  rememberTapeMonth(storage, tapeMonthStorageKey("equities"), "2026-10");
+  assert.equal(storedTapeMonth(storage, tapeMonthStorageKey("crypto"), months), "2026-09");
+  assert.equal(storedTapeMonth(storage, tapeMonthStorageKey("equities"), months), "2026-10");
+  assert.equal(storedTapeMonth(storage, tapeMonthStorageKey("crypto"), ["2026-10"]), TAPE_MONTH_ALL);
+
+  const broken = {
+    getItem() {
+      throw new Error("private");
+    },
+    setItem() {
+      throw new Error("private");
+    },
+  };
+  assert.equal(storedTapeMonth(broken, tapeMonthStorageKey("crypto"), months), TAPE_MONTH_ALL);
+  assert.doesNotThrow(() => rememberTapeMonth(broken, tapeMonthStorageKey("crypto"), "2026-09"));
+});
+
+test("scrubbed crypto tape has September and October and All keeps both", () => {
+  const trades = JSON.parse(readFileSync(new URL("../data/kpi_trades_scrubbed.json", import.meta.url), "utf8"));
+  const crypto = trades.filter((row) => row.sleeve === "crypto");
+  const equities = trades.filter((row) => row.sleeve === "equities");
+  const cryptoMonths = tapeMonthOptions(crypto);
+  assert.ok(cryptoMonths.includes("2026-09"));
+  assert.ok(cryptoMonths.includes("2026-10"));
+  assert.deepEqual(cryptoMonths, [...cryptoMonths].sort());
+
+  const september = filterTapeByMonth(crypto, "2026-09");
+  const october = filterTapeByMonth(crypto, "2026-10");
+  assert.ok(september.length > 0);
+  assert.ok(october.length > 0);
+  assert.equal(september.length + october.length, crypto.length);
+  assert.equal(filterTapeByMonth(crypto, TAPE_MONTH_ALL).length, crypto.length);
+  assert.ok(september.every((row) => etMonthKey(fillStamp(row)) === "2026-09"));
+  assert.ok(october.every((row) => etMonthKey(fillStamp(row)) !== "2026-09"));
+  assert.equal(fillCountText(september.length, crypto.length), `${september.length} of ${crypto.length} fills`);
+  assert.equal(fillCountText(crypto.length, crypto.length), `${crypto.length} fills`);
+
+  assert.equal(filterTapeByMonth(equities, TAPE_MONTH_ALL).length, equities.length);
+  const equityMonths = tapeMonthOptions(equities);
+  const equitySum = equityMonths.reduce((sum, key) => sum + filterTapeByMonth(equities, key).length, 0);
+  assert.equal(equitySum, equities.length);
 });
