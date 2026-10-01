@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { cardOpenKey, defaultCardOpen, modelCardId, rememberOpen, storedOpen } from "../collapse.js";
 import { buildChart, filterRows, sampleAt } from "../curves.js";
 import {
   formatWinPct,
@@ -165,6 +166,51 @@ test("scrubbed tape yields a win % for each sleeve", () => {
     else if (stats.rate < 0.5) assert.equal(winTone(stats), "down");
     else assert.equal(winTone(stats), "flat");
   }
+});
+
+test("card collapse defaults remember a toggle and stay off tape and position keys", () => {
+  assert.equal(defaultCardOpen("equities"), false);
+  assert.equal(defaultCardOpen("Equities"), false);
+  assert.equal(defaultCardOpen("equity"), false);
+  assert.equal(defaultCardOpen("crypto"), true);
+  assert.equal(defaultCardOpen("combined"), true);
+  assert.equal(defaultCardOpen(""), true);
+  assert.equal(cardOpenKey("equities"), "the-book-card-open:equities");
+  assert.equal(cardOpenKey("crypto"), "the-book-card-open:crypto");
+  assert.equal(cardOpenKey("combined"), "the-book-card-open:combined");
+  assert.equal(cardOpenKey("crypto-scorecard"), "the-book-card-open:crypto-scorecard");
+  assert.notEqual(cardOpenKey("crypto"), tapeOpenKey("crypto"));
+  assert.notEqual(cardOpenKey("equities"), posOpenKey("equities"));
+  assert.equal(modelCardId({ sleeve: "equities", name: "lgbm_equity_v1" }), "model-equities-lgbm-equity-v1");
+  assert.equal(modelCardId({ sleeve: "crypto", name: "Crypto lgbm_v1" }), "model-crypto-crypto-lgbm-v1");
+
+  const mem = new Map();
+  const storage = {
+    getItem: (key) => (mem.has(key) ? mem.get(key) : null),
+    setItem: (key, value) => mem.set(key, String(value)),
+  };
+  assert.equal(storedOpen(storage, cardOpenKey("equities"), defaultCardOpen("equities")), false);
+  assert.equal(storedOpen(storage, cardOpenKey("crypto"), defaultCardOpen("crypto")), true);
+  assert.equal(storedOpen(storage, cardOpenKey("combined"), defaultCardOpen("combined")), true);
+  assert.equal(storedOpen(storage, tapeOpenKey("equities"), true), true);
+  assert.equal(storedOpen(storage, posOpenKey("equities"), true), true);
+  rememberOpen(storage, cardOpenKey("equities"), true);
+  assert.equal(storedOpen(storage, cardOpenKey("equities"), false), true);
+  rememberOpen(storage, cardOpenKey("crypto"), false);
+  assert.equal(storedOpen(storage, cardOpenKey("crypto"), true), false);
+  mem.set(cardOpenKey("combined"), "nope");
+  assert.equal(storedOpen(storage, cardOpenKey("combined"), true), true);
+  const broken = {
+    getItem() {
+      throw new Error("private");
+    },
+    setItem() {
+      throw new Error("quota");
+    },
+  };
+  assert.equal(storedOpen(broken, cardOpenKey("equities"), false), false);
+  assert.equal(storedOpen(broken, tapeOpenKey("crypto"), true), true);
+  assert.doesNotThrow(() => rememberOpen(broken, cardOpenKey("crypto"), false));
 });
 
 test("position open keys are per sleeve and do not reuse tape keys", () => {

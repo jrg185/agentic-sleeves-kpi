@@ -1,3 +1,4 @@
+import { cardOpenKey, defaultCardOpen, modelCardId, rememberOpen, storedOpen } from "./collapse.js";
 import { buildChart, sampleAt } from "./curves.js";
 import {
   closedFillStats,
@@ -37,6 +38,30 @@ function el(tag, className, text) {
   if (className) node.className = className;
   if (text != null) node.textContent = text;
   return node;
+}
+
+function mountCollapse({ heading, label, panel, storageKey, defaultOpen, collapsedHost = null }) {
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "tape-toggle";
+  toggle.setAttribute("aria-controls", panel.id);
+  const open = storedOpen(localStorage, storageKey, defaultOpen);
+  toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  toggle.append(document.createTextNode(label));
+  const chevron = el("span", "chevron");
+  chevron.setAttribute("aria-hidden", "true");
+  toggle.append(chevron);
+  heading.append(toggle);
+  panel.hidden = !open;
+  if (collapsedHost) collapsedHost.classList.toggle("is-collapsed", !open);
+  toggle.addEventListener("click", () => {
+    const next = toggle.getAttribute("aria-expanded") !== "true";
+    toggle.setAttribute("aria-expanded", next ? "true" : "false");
+    panel.hidden = !next;
+    if (collapsedHost) collapsedHost.classList.toggle("is-collapsed", !next);
+    rememberOpen(localStorage, storageKey, next);
+  });
+  return toggle;
 }
 
 function metric(label, value, valueClass) {
@@ -212,16 +237,19 @@ function splitPnl(label, dollars, frac, fine) {
 function renderSleeve(derived, { hero = false, trades = [] } = {}) {
   const card = el("article", `sleeve ${derived.sleeve}${hero ? " hero" : ""}`);
   const head = el("header", "sleeve-head");
-  head.append(el("h2", null, derived.label));
+  const title = el("h2");
+  head.append(title);
   if (derived.asOf) {
     const when = el("time", null, formatEt(derived.asOf));
     when.dateTime = String(derived.asOf);
     head.append(when);
   }
-  card.append(head);
-
   const status = sleeveStatus(derived.sleeve);
   if (status) head.append(el("p", `chip ${status.className}`, status.label));
+  card.append(head);
+
+  const panel = el("div", "card-panel");
+  panel.id = `card-panel-${derived.sleeve}`;
   const grid = el("div", "metrics");
   const balance = metric(
     "Running balance (book)",
@@ -282,10 +310,19 @@ function renderSleeve(derived, { hero = false, trades = [] } = {}) {
   win.append(el("p", "fine", formatWinRecord(stats)));
   grid.append(win);
 
-  card.append(grid);
-  if (derived.note) card.append(el("p", "note", String(derived.note)));
+  panel.append(grid);
+  if (derived.note) panel.append(el("p", "note", String(derived.note)));
   const realign = sleeveRealignNote(derived.sleeve);
-  if (realign) card.append(el("p", "note", realign));
+  if (realign) panel.append(el("p", "note", realign));
+  card.append(panel);
+  mountCollapse({
+    heading: title,
+    label: derived.label,
+    panel,
+    storageKey: cardOpenKey(derived.sleeve),
+    defaultOpen: defaultCardOpen(derived.sleeve),
+    collapsedHost: card,
+  });
   return card;
 }
 
@@ -342,44 +379,6 @@ function feeText(seed, frac) {
 
 function tradeStamp(trade) {
   return trade?.timestamp_et || trade?.ts || "";
-}
-
-function storedTapeOpen(sleeve) {
-  try {
-    const value = localStorage.getItem(tapeOpenKey(sleeve));
-    if (value === "closed") return false;
-    if (value === "open") return true;
-  } catch {
-    /* localStorage can throw in private mode. Default to open. */
-  }
-  return true;
-}
-
-function storeTapeOpen(sleeve, open) {
-  try {
-    localStorage.setItem(tapeOpenKey(sleeve), open ? "open" : "closed");
-  } catch {
-    /* Ignore quota and private-mode failures. The toggle still works this visit. */
-  }
-}
-
-function storedPosOpen(sleeve) {
-  try {
-    const value = localStorage.getItem(posOpenKey(sleeve));
-    if (value === "closed") return false;
-    if (value === "open") return true;
-  } catch {
-    /* localStorage can throw in private mode. Default to open. */
-  }
-  return true;
-}
-
-function storePosOpen(sleeve, open) {
-  try {
-    localStorage.setItem(posOpenKey(sleeve), open ? "open" : "closed");
-  } catch {
-    /* Ignore quota and private-mode failures. The toggle still works this visit. */
-  }
 }
 
 function fillLinked(parent, text, sleeve) {
@@ -461,18 +460,15 @@ function renderTape(sleeve, trades) {
   const section = el("section", `tape ${sleeve}`);
   const head = el("div", "tape-head");
   const heading = el("h3");
-  const toggle = document.createElement("button");
-  toggle.type = "button";
-  toggle.className = "tape-toggle";
-  const panelId = `tape-panel-${sleeve}`;
-  toggle.setAttribute("aria-controls", panelId);
-  const open = storedTapeOpen(sleeve);
-  toggle.setAttribute("aria-expanded", open ? "true" : "false");
-  toggle.append(document.createTextNode(labelFor(sleeve)));
-  const chevron = el("span", "chevron");
-  chevron.setAttribute("aria-hidden", "true");
-  toggle.append(chevron);
-  heading.append(toggle);
+  const panel = el("div", "tape-panel");
+  panel.id = `tape-panel-${sleeve}`;
+  mountCollapse({
+    heading,
+    label: labelFor(sleeve),
+    panel,
+    storageKey: tapeOpenKey(sleeve),
+    defaultOpen: true,
+  });
 
   const exportBtn = document.createElement("button");
   exportBtn.type = "button";
@@ -480,15 +476,6 @@ function renderTape(sleeve, trades) {
   exportBtn.textContent = "Download CSV";
   exportBtn.setAttribute("aria-label", `Download ${labelFor(sleeve)} CSV`);
 
-  const panel = el("div", "tape-panel");
-  panel.id = panelId;
-  panel.hidden = !open;
-  toggle.addEventListener("click", () => {
-    const next = toggle.getAttribute("aria-expanded") !== "true";
-    toggle.setAttribute("aria-expanded", next ? "true" : "false");
-    panel.hidden = !next;
-    storeTapeOpen(sleeve, next);
-  });
   exportBtn.addEventListener("click", () => {
     const rows = trades.map((trade) => tapeFields(sleeve, trade));
     downloadCsv(csvFilename(sleeve), tapeCsv(rows));
@@ -613,27 +600,14 @@ function unwindLabel(ticker) {
 function renderPositionTable(title, rows, { showSleeve, sleeve, unwind = false }) {
   const section = el("section", "pos");
   const heading = el("h3");
-  const toggle = document.createElement("button");
-  toggle.type = "button";
-  toggle.className = "tape-toggle";
-  const panelId = `pos-panel-${sleeve}`;
-  toggle.setAttribute("aria-controls", panelId);
-  const open = storedPosOpen(sleeve);
-  toggle.setAttribute("aria-expanded", open ? "true" : "false");
-  toggle.append(document.createTextNode(title));
-  const chevron = el("span", "chevron");
-  chevron.setAttribute("aria-hidden", "true");
-  toggle.append(chevron);
-  heading.append(toggle);
-
   const panel = el("div", "pos-panel");
-  panel.id = panelId;
-  panel.hidden = !open;
-  toggle.addEventListener("click", () => {
-    const next = toggle.getAttribute("aria-expanded") !== "true";
-    toggle.setAttribute("aria-expanded", next ? "true" : "false");
-    panel.hidden = !next;
-    storePosOpen(sleeve, next);
+  panel.id = `pos-panel-${sleeve}`;
+  mountCollapse({
+    heading,
+    label: title,
+    panel,
+    storageKey: posOpenKey(sleeve),
+    defaultOpen: true,
   });
   section.append(heading);
   if (!rows.length) {
@@ -962,9 +936,12 @@ function renderCryptoScorecard(models, oosPayload, summary, trades, scorecard) {
   const card = el("article", "sleeve crypto model-card model-scorecard");
   card.id = "crypto-scorecard";
   const head = el("header", "sleeve-head");
-  head.append(el("h2", null, "Crypto scorecard"));
+  const title = el("h2");
+  head.append(title);
   head.append(el("p", "fine", "Closed fills, rails, and the published out-of-sample read"));
   card.append(head);
+  const panel = el("div", "card-panel");
+  panel.id = "card-panel-crypto-scorecard";
 
   const grid = el("div", "metrics");
   const backend = backendView(scorecard, models, oosPayload);
@@ -1030,7 +1007,7 @@ function renderCryptoScorecard(models, oosPayload, summary, trades, scorecard) {
   }
   headroom.append(el("p", "fine", rails.join(". ") || "Day rails are not in this snapshot."));
   grid.append(headroom);
-  card.append(grid);
+  panel.append(grid);
 
   const unique = scorecard?.order_id_unique;
   let fillNote = fills.orderIdAvailable
@@ -1044,13 +1021,13 @@ function renderCryptoScorecard(models, oosPayload, summary, trades, scorecard) {
   ) {
     fillNote = `Warehouse order-id unique closed sells are ${unique.wins}\u2013${unique.losses}. The headline matches sleeve Win % on the scrubbed tape. T24b will improve joined-fill metrics.`;
   }
-  card.append(el("p", "note", fillNote));
+  panel.append(el("p", "note", fillNote));
 
   const oosModels = cryptoOosModels(oosPayload);
   const oosNote = oosPayload?.note || scorecard?.oos?.note;
   const feeBps = scorecard?.oos?.fee_bps ?? 30;
   if (!oosModels.length) {
-    card.append(el("p", "note", "No crypto out-of-sample rows in this snapshot."));
+    panel.append(el("p", "note", "No crypto out-of-sample rows in this snapshot."));
   } else {
     const wrap = el("div", "score-scroll");
     const table = el("table", "score-oos");
@@ -1078,11 +1055,11 @@ function renderCryptoScorecard(models, oosPayload, summary, trades, scorecard) {
     }
     table.append(thead, tbody);
     wrap.append(table);
-    card.append(wrap);
+    panel.append(wrap);
   }
   const benchmark = oosPayload?.benchmark_note || scorecard?.oos?.benchmark_note;
-  if (benchmark) card.append(el("p", "fine", String(benchmark)));
-  card.append(
+  if (benchmark) panel.append(el("p", "fine", String(benchmark)));
+  panel.append(
     el(
       "p",
       "note",
@@ -1101,8 +1078,17 @@ function renderCryptoScorecard(models, oosPayload, summary, trades, scorecard) {
   if (train.trained_at) trainBits.push(`Trained ${formatEt(train.trained_at)}`);
   if (train.promoted_at) trainBits.push(`Promoted ${formatEt(train.promoted_at)}`);
   trainBits.push(train.note || "No separate train or promote timestamp is in the exported model files.");
-  card.append(el("p", "fine", trainBits.join(". ").replace(/\.\./g, ".")));
-  card.append(renderSignalLinkage(scorecard));
+  panel.append(el("p", "fine", trainBits.join(". ").replace(/\.\./g, ".")));
+  panel.append(renderSignalLinkage(scorecard));
+  card.append(panel);
+  mountCollapse({
+    heading: title,
+    label: "Crypto scorecard",
+    panel,
+    storageKey: cardOpenKey("crypto-scorecard"),
+    defaultOpen: defaultCardOpen("crypto"),
+    collapsedHost: card,
+  });
   return card;
 }
 
@@ -1149,6 +1135,7 @@ function renderModels(payload, oosPayload, meta, summary, trades, scorecard) {
   const grid = el("div", "model-grid");
   const used = new Set();
   const anchored = new Set();
+  const cardIds = new Set();
   for (const model of models) {
     const mine = exported.filter((row) => sameSleeve(row, String(model.sleeve || "").toLowerCase()));
     for (const row of mine) used.add(row);
@@ -1159,12 +1146,18 @@ function renderModels(payload, oosPayload, meta, summary, trades, scorecard) {
       anchored.add(sleeveName);
     }
     const head = el("header", "sleeve-head");
-    head.append(el("h2", null, model.name || "Model"));
+    const title = el("h2");
+    head.append(title);
     if (model.sleeve) head.append(el("p", "fine", String(model.sleeve)));
     if (sleeveName === "equities") head.append(el("p", "chip paused", "Paused"));
     card.append(head);
+    const panel = el("div", "card-panel");
+    let storageId = modelCardId(model);
+    if (cardIds.has(storageId)) storageId = `${storageId}-${cardIds.size + 1}`;
+    cardIds.add(storageId);
+    panel.id = `card-panel-${storageId}`;
     if (sleeveName === "equities") {
-      card.append(
+      panel.append(
         el(
           "p",
           "note",
@@ -1191,7 +1184,16 @@ function renderModels(payload, oosPayload, meta, summary, trades, scorecard) {
       oosDd.textContent = oosText(model.oos);
     }
     list.append(oosDd);
-    card.append(list);
+    panel.append(list);
+    card.append(panel);
+    mountCollapse({
+      heading: title,
+      label: model.name || "Model",
+      panel,
+      storageKey: cardOpenKey(storageId),
+      defaultOpen: defaultCardOpen(sleeveName),
+      collapsedHost: card,
+    });
     grid.append(card);
   }
   modelsEl.append(grid);

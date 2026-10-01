@@ -83,8 +83,10 @@ test("live backend stays rules and crypto OOS keeps rules, logistic, and lgbm", 
   assert.equal(rows.find((row) => row.model === "logistic").promoted, false);
   const crypto = summary.find((row) => row.sleeve === "crypto");
   const derived = deriveSleeve(crypto);
-  assert.equal(formatPct(derived.killHeadroomFrac), "1.3%");
-  assert.equal(formatUsd(derived.killHeadroom), "$4.04");
+  const scorecard = read("model_scorecard.json");
+  assert.equal(formatPct(derived.killHeadroomFrac), formatPct(scorecard.kill.kill_headroom_frac));
+  assert.equal(formatUsd(derived.killHeadroom), formatUsd(scorecard.kill.kill_headroom_usd));
+  assert.equal(Number.isFinite(scorecard.kill.kill_headroom_usd), true);
   assert.equal(formatPct(derived.dayKillFrac), "-10.0%");
   assert.equal(formatUsd(derived.dayKill), "-$30.00");
   assert.equal(formatPct(derived.dayTargetFrac, { signed: true }), "+2.5%");
