@@ -127,6 +127,7 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
   grid-template-columns: 1fr 1fr;
   gap: 16px;
   min-width: 0;
+  align-items: start;
   padding-bottom: 28px;
 }
 
@@ -188,6 +189,7 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
   grid-template-columns: 1fr 1fr;
   gap: 16px;
   min-width: 0;
+  align-items: start;
 }
 
 .sleeve-head {
@@ -200,6 +202,8 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
 }
 
 .sleeve-head h2 { margin: 0; font-size: 1.8rem; }
+.sleeve-head h2 .tape-toggle { letter-spacing: -0.03em; }
+.sleeve.is-collapsed .sleeve-head { margin-bottom: 0; }
 .sleeve-head time, .sleeve-head .fine { color: var(--muted); font-size: 0.85rem; }
 .sleeve-head .fine { margin: 0; }
 
