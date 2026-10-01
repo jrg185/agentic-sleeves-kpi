@@ -160,6 +160,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           KPI_REFRESH_EXPECTED: "1"
         run: python3 scripts/export_kpi.py
 
@@ -168,7 +169,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- data/kpi_summary.json data/kpi_trades_scrubbed.json data/open_positions.json data/sleeve_curves.json data/models_oos.json data/meta.json
+          git add -- data/kpi_summary.json data/kpi_trades_scrubbed.json data/open_positions.json data/sleeve_curves.json data/models_oos.json data/model_scorecard.json data/meta.json
           if [ -f data/rh_kpi_sync_cursor.json ]; then
             git add -- data/rh_kpi_sync_cursor.json
           fi

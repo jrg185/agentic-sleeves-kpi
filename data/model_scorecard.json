@@ -34,10 +34,10 @@
     "note": "No fee column on the scrubbed tape. Not estimated."
   },
   "kill": {
-    "as_of": "2026-10-01T00:08:55+00:00",
-    "kill_headroom_stored": 1.323233,
-    "kill_headroom_frac": 0.01323233,
-    "kill_headroom_usd": 3.97,
+    "as_of": "2026-10-01T00:44:28+00:00",
+    "kill_headroom_stored": 1.293335,
+    "kill_headroom_frac": 0.01293335,
+    "kill_headroom_usd": 3.88,
     "day_kill_pct": -0.1,
     "day_kill_usd": -30.0,
     "day_target_pct": 0.025,
@@ -49,7 +49,7 @@
     "fee_bps": 30,
     "updated_at": "2026-09-28T00:16:00Z",
     "benchmark_note": "Crypto sleeve_ir_vs_spy uses BTC-USD hourly, not SPY. LightGBM promotion is after-cost mean only.",
-    "note": "Out-of-sample after-cost uses 30 bp. Live fees are higher. T24d will fee-correct this comparison.",
+    "note": "Out-of-sample after-cost uses 30 bp. Measured live fee ~95 bps/leg (median) / ~190 RT from tape. T24d will set FEE_BPS from that.",
     "models": [
       {
         "model": "rules",

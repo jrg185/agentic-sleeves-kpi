@@ -334,6 +334,12 @@ function notionalText(seed, frac) {
   return dollars == null ? pct : `${formatUsd(dollars)} (${pct})`;
 }
 
+function feeText(seed, frac) {
+  if (frac == null) return "\u2014";
+  const dollars = seedTimes(seed, frac);
+  return dollars == null ? "\u2014" : formatUsd(dollars);
+}
+
 function tradeStamp(trade) {
   return trade?.timestamp_et || trade?.ts || "";
 }
@@ -402,6 +408,7 @@ function tapeFields(sleeve, trade) {
     ticker: trade.ticker || "\u2014",
     side: trade.side || "\u2014",
     notional: notionalText(seed, readFrac(trade, "notional_frac_of_book")),
+    fee: feeText(seed, readFrac(trade, "fee_frac_of_book")),
     tradePnl: formatUsd(pnl, { signed: true }),
     runningPnl: formatUsd(shaped.runningPnl, { signed: true }),
     runningBalance: formatUsd(shaped.runningBalance),
@@ -507,14 +514,14 @@ function renderTape(sleeve, trades) {
 
   const wrap = el("div", "table-wrap");
   const table = el("table");
-  const captionText = `${labelFor(sleeve)} fills. Trade P&L, running P&L, and running balance are the book seed times the fraction. Running balance is start plus realized P&L through that fill.`;
+  const captionText = `${labelFor(sleeve)} fills. Fee, trade P&L, running P&L, and running balance are the book seed times the fraction. Fee is fee_frac_of_book. Running balance is start plus realized P&L through that fill.`;
   const caption = el("caption", "sr-only", `${labelFor(sleeve)} fills`);
   const note = el("p", "tape-note", captionText);
   note.id = `tape-note-${sleeve}`;
   table.setAttribute("aria-describedby", note.id);
   const thead = el("thead");
   const headRow = el("tr");
-  for (const label of ["Time", "Ticker", "Side", "Notional", "Trade P&L", "Running P&L", "Running balance", "Why"]) {
+  for (const label of ["Time", "Ticker", "Side", "Notional", "Fee", "Trade P&L", "Running P&L", "Running balance", "Why"]) {
     const th = el("th", null, label);
     th.scope = "col";
     headRow.append(th);
@@ -532,6 +539,7 @@ function renderTape(sleeve, trades) {
       el("td", "ticker", fields.ticker),
       side,
       el("td", "num", fields.notional),
+      el("td", "num", fields.fee),
       el("td", `num ${tone(fields.pnl)}`, fields.tradePnl),
       el("td", `num ${tone(fields.runningPnlValue)}`, fields.runningPnl),
       el("td", `num ${tone(fields.runningBalanceValue)}`, fields.runningBalance),
@@ -1080,7 +1088,7 @@ function renderCryptoScorecard(models, oosPayload, summary, trades, scorecard) {
       "note",
       oosNote && String(oosNote).includes("30 bp")
         ? String(oosNote)
-        : `Out-of-sample after-cost uses ${feeBps} bp. Live fees are higher. T24d will fee-correct this comparison.`
+        : `Out-of-sample after-cost uses ${feeBps} bp. Measured live fee ~95 bps/leg (median) / ~190 RT from tape. T24d will set FEE_BPS from that.`
     )
   );
 

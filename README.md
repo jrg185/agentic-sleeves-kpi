@@ -63,7 +63,7 @@ Workflow: [`.github/workflows/export-kpi.yml`](.github/workflows/export-kpi.yml)
 - A fill payload, or a secrets-backed hourly poll, upserts `public.kpi_trades`, then the same run refreshes `kpi_sleeve_snapshots` and exports. A bad requested payload, or a failed refresh, does not commit KPI JSON
 - Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. `SUPABASE_DB_URL` is optional
 - Crypto marks: public Coinbase ticker, then Yahoo `{SYMBOL}-USD`. Equities marks: Finnhub when `FINNHUB_API_KEY` is set, then Yahoo chart. CoinStats and Alpha Vantage are later fallbacks when those keys are set
-- Writes `data/kpi_summary.json`, `data/kpi_trades_scrubbed.json`, `data/models_oos.json`, `data/model_scorecard.json`, and `data/meta.json` when they changed
+- Writes `data/kpi_summary.json`, `data/kpi_trades_scrubbed.json`, `data/models_oos.json`, `data/model_scorecard.json`, and `data/meta.json` when they changed. The commit step `git add`s `data/model_scorecard.json` with the other KPI files. `SUPABASE_DB_URL` is passed into the export step so fee and signal-linkage reads can fall back to SQL.
 - Does not rewrite `data/models.json`
 - Does not deploy Pages and does not change the Pages source
 
@@ -121,6 +121,7 @@ Optional seed override on a row: `start`, `seed`, `start_usd`, `seed_usd`, or `b
 | `running_pnl_frac` | Cumulative realized P&L through that fill ÷ sleeve seed. Export regenerates this per sleeve in timestamp order. Crypto seed $300, equities seed $500. |
 | `running_balance_frac` | Book at that fill ÷ sleeve seed, where book = start + cumulative realized P&L. Not cash leftover and not open-position mark-to-market. |
 | `why` | Full note. No `left()` truncation. No PII. A machine `RH Agentic backfill order <uuid>` or `RH Agentic sync order <uuid>` string is not the human note. New fills leave `why` empty unless the payload has a human note. |
+| `fee_frac_of_book` | Fill fee ÷ sleeve seed, when the warehouse row had `fee_usd`. The page shows seed × this fraction. Raw `fee_usd` dollars and order ids are not written. |
 
 Export always recomputes `running_pnl_frac` and `running_balance_frac` from warehouse trade P&L before writing JSON. It does not copy a sheet running balance. When the scrubbed row includes `pnl_trade_usd`, the sum is dollars then ÷ seed. Otherwise it sums `pnl_frac_of_book` (each value is already trade P&L ÷ seed). `why` is written in full. If `why` is a machine order string and `notes` is human, the JSON `why` is the notes text.
 

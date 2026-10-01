@@ -80,7 +80,7 @@ test("live backend stays rules and crypto OOS keeps rules, logistic, and lgbm", 
   const crypto = summary.find((row) => row.sleeve === "crypto");
   const derived = deriveSleeve(crypto);
   assert.equal(formatPct(derived.killHeadroomFrac), "1.3%");
-  assert.equal(formatUsd(derived.killHeadroom), "$3.97");
+  assert.equal(formatUsd(derived.killHeadroom), "$3.88");
   assert.equal(formatPct(derived.dayKillFrac), "-10.0%");
   assert.equal(formatUsd(derived.dayKill), "-$30.00");
   assert.equal(formatPct(derived.dayTargetFrac, { signed: true }), "+2.5%");
@@ -95,6 +95,16 @@ test("models tab markup loads the scorecard instead of a second page", () => {
   assert.equal(app.includes('metric("Fee drag"'), true);
   assert.equal(app.includes("UNKNOWN"), true);
   assert.equal(app.includes("30 bp"), true);
+  assert.equal(app.includes("95 bps/leg"), true);
+  assert.equal(app.includes("190 RT"), true);
+  assert.equal(app.includes("fee_frac_of_book"), true);
+  assert.equal(app.includes('"Fee"'), true);
+  const scorecard = read("model_scorecard.json");
+  assert.match(scorecard.oos.note, /95 bps\/leg/);
+  assert.match(scorecard.oos.note, /190 RT/);
+  assert.match(scorecard.oos.note, /T24d will set FEE_BPS/);
+  assert.equal(scorecard.oos.fee_bps, 30);
+  assert.equal(scorecard.fee_drag.status, "unknown");
   assert.equal(app.includes("T24b will improve joined-fill metrics."), true);
   assert.equal(app.includes("signal_artifacts"), true);
   assert.equal(app.includes("signal_trade_outcomes"), true);

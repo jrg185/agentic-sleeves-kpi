@@ -895,6 +895,9 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
     rows["crypto_fee_drag"] = facts["fee_drag"]
     rows["order_id_unique"] = facts["order_id_unique"]
     rows["signal_linkage"] = load_signal_linkage(base_url, key, db_url)
+    rows["kpi_trades_scrubbed"] = attach_fee_frac(
+        rows["kpi_trades_scrubbed"], facts.get("fee_rows") or []
+    )
     return rows
 
 
@@ -1081,17 +1084,27 @@ def stamp_export_failure(
 
 
 OOS_FEE_BPS = 30
+# Recorded from warehouse tape: median positive fee_ratio ≈ 0.0095.
+# T24d sets FEE_BPS from this. This export does not retrain.
+LIVE_FEE_HANDOFF = (
+    "Measured live fee ~95 bps/leg (median) / ~190 RT from tape. "
+    "T24d will set FEE_BPS from that."
+)
 OOS_MODEL_ORDER = ("rules", "logistic", "lgbm")
 FEE_FIELD_KEYS = ("fee_usd", "fee", "fee_charged")
-CRYPTO_FACT_QUERIES = (
-    "sleeve=eq.crypto&select=side,order_id,pnl_trade_usd,pnl_frac_of_book,fee_usd&limit=2000",
-    "sleeve=eq.crypto&select=side,order_id,pnl_trade_usd,fee_usd&limit=2000",
-    "sleeve=eq.crypto&select=side,order_id,pnl_frac_of_book,fee_usd&limit=2000",
-    "sleeve=eq.crypto&select=side,order_id,pnl_trade_usd,fee&limit=2000",
-    "sleeve=eq.crypto&select=side,fee_usd&limit=2000",
-    "sleeve=eq.crypto&select=side,fee&limit=2000",
+CRYPTO_FACT_SELECTS = (
+    "side,order_id,timestamp_et,ticker,notional_usd,pnl_trade_usd,pnl_frac_of_book,fee_usd",
+    "side,order_id,timestamp_et,ticker,notional_usd,fee_usd",
+    "side,order_id,pnl_trade_usd,pnl_frac_of_book,fee_usd",
+    "side,order_id,pnl_trade_usd,fee_usd",
+    "side,fee_usd",
+    "side,fee",
 )
 CRYPTO_FACT_SQL = (
+    "select side, order_id, timestamp_et, ticker, notional_usd, pnl_trade_usd, pnl_frac_of_book, fee_usd "
+    "from public.kpi_trades where sleeve = 'crypto'",
+    "select side, order_id, timestamp_et, ticker, notional_usd, fee_usd "
+    "from public.kpi_trades where sleeve = 'crypto'",
     "select side, order_id, pnl_trade_usd, pnl_frac_of_book, fee_usd from public.kpi_trades where sleeve = 'crypto'",
     "select side, order_id, pnl_trade_usd, fee_usd from public.kpi_trades where sleeve = 'crypto'",
     "select side, order_id, pnl_trade_usd, fee from public.kpi_trades where sleeve = 'crypto'",
@@ -1240,6 +1253,13 @@ def fee_drag_from_rows(rows: list, sleeve: str = "crypto", seed: Decimal = Decim
     def usd(value: Decimal) -> float:
         return float(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
+    note = (
+        "Sum of crypto fee dollars on the rows that were read. Identifiers are not written. "
+        + LIVE_FEE_HANDOFF
+    )
+    median_bps = _median_positive_fee_bps(rows, sleeve)
+    if median_bps is not None:
+        note += f" This read median {median_bps} bps/leg (~{median_bps * 2} RT)."
     return {
         "status": "known",
         "fee_usd": usd(total),
@@ -1247,8 +1267,98 @@ def fee_drag_from_rows(rows: list, sleeve: str = "crypto", seed: Decimal = Decim
         "fee_frac": float(q6(total / seed)) if seed else None,
         "n": n,
         "seed_usd": int(seed),
-        "note": "Sum of crypto fee dollars on the rows that were read. Identifiers are not written.",
+        "note": note,
     }
+
+
+def _median_positive_fee_bps(rows: list, sleeve: str = "crypto") -> int | None:
+    """Median fee_usd / notional_usd among positive fees, in basis points."""
+    ratios: list[Decimal] = []
+    for row in rows or []:
+        if not isinstance(row, dict) or _sleeve_name(row) not in {sleeve, ""}:
+            continue
+        fee = _decimal_or_none(row.get("fee_usd"))
+        if fee is None:
+            fee = _decimal_or_none(row.get("fee"))
+        notional = _decimal_or_none(row.get("notional_usd"))
+        if fee is None or notional is None or fee <= 0 or notional <= 0:
+            continue
+        ratios.append(fee / notional)
+    if not ratios:
+        return None
+    ratios.sort()
+    mid = len(ratios) // 2
+    if len(ratios) % 2:
+        median = ratios[mid]
+    else:
+        median = (ratios[mid - 1] + ratios[mid]) / Decimal(2)
+    return int((median * Decimal(10000)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def _fee_match_key(row: dict):
+    ticker = str(row.get("ticker") or "").strip().upper()
+    side = str(row.get("side") or "").strip().lower()
+    stamp = row.get("timestamp_et") if row.get("timestamp_et") not in (None, "") else row.get("ts")
+    if not ticker or side not in {"buy", "sell"} or stamp in (None, ""):
+        return None
+    text = str(stamp).strip().replace("Z", "+00:00")
+    try:
+        parsed = dt.datetime.fromisoformat(text)
+    except ValueError:
+        stamp_key = text
+    else:
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=dt.timezone.utc)
+        stamp_key = parsed.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")
+    sleeve = str(row.get("sleeve") or "crypto").strip().lower()
+    return sleeve, ticker, side, stamp_key
+
+
+def _row_fee_usd(row: dict) -> Decimal | None:
+    for key in FEE_FIELD_KEYS:
+        if key in row:
+            amount = _decimal_or_none(row.get(key))
+            if amount is not None:
+                return amount
+    return None
+
+
+def attach_fee_frac(rows: list, facts: list) -> list:
+    """Publish fee_frac_of_book (fee dollars / sleeve seed). Drop raw fee dollars and ids.
+
+    Facts may carry order ids and fee dollars. Those fields are not copied onto
+    the public tape. A row with no matched fee is left without a fee fraction.
+    """
+    queues: dict[tuple, list] = {}
+    for fact in facts or []:
+        if not isinstance(fact, dict):
+            continue
+        key = _fee_match_key(fact)
+        if key is None:
+            continue
+        queues.setdefault(key, []).append(fact)
+    out = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            out.append(row)
+            continue
+        item = dict(row)
+        fee = _row_fee_usd(item)
+        if fee is None:
+            key = _fee_match_key(item)
+            bucket = queues.get(key) if key is not None else None
+            if bucket:
+                fee = _row_fee_usd(bucket.pop(0))
+        sleeve = str(item.get("sleeve") or "").strip().lower()
+        seed = LEDGER_SEEDS.get(sleeve)
+        if fee is not None and seed not in (None, 0):
+            item["fee_frac_of_book"] = float(q6(fee / seed))
+        for key in FEE_FIELD_KEYS:
+            item.pop(key, None)
+        item.pop("order_id", None)
+        item.pop("notional_usd", None)
+        out.append(item)
+    return out
 
 
 def _oos_list(payload) -> list:
@@ -1380,7 +1490,7 @@ def oos_block(oos) -> dict:
         "fee_bps": OOS_FEE_BPS,
         "updated_at": payload.get("updated_at") if isinstance(payload, dict) else None,
         "benchmark_note": payload.get("benchmark_note") if isinstance(payload, dict) else None,
-        "note": "Out-of-sample after-cost uses 30 bp. Live fees are higher. T24d will fee-correct this comparison.",
+        "note": "Out-of-sample after-cost uses 30 bp. " + LIVE_FEE_HANDOFF,
         "models": models,
     }
 
@@ -1436,6 +1546,39 @@ def _rest_latest_count(base_url: str, key: str, table: str, stamp: str):
     return count, latest
 
 
+def _rest_count(base_url: str, key: str, table: str) -> int | None:
+    """Exact row count. The response body is discarded."""
+    request = urllib.request.Request(
+        base_url.rstrip("/") + f"/rest/v1/{table}?select=*",
+        headers={
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Accept": "application/json",
+            "Prefer": "count=exact",
+            "Range": "0-0",
+            "User-Agent": "agentic-sleeves-kpi-export",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            response.read()
+            return _content_range_count(response.headers.get("content-range"))
+    except Exception:
+        return None
+
+
+def _sql_count_pair(db_url: str, table: str):
+    for sql in (
+        f"select count(*)::int as n, max(generated_at) as latest from public.{table}",
+        f"select count(*)::int as n, max(created_at) as latest from public.{table}",
+        f"select count(*)::int as n, null::timestamptz as latest from public.{table}",
+    ):
+        rows = _sql_optional(db_url, sql)
+        if rows:
+            return rows[0].get("n"), rows[0].get("latest")
+    return None
+
+
 def load_signal_linkage(base_url: str, key: str | None, db_url: str | None) -> dict:
     """Counts and the latest generated_at only. No artifact payload, no order ids."""
     if not key and not db_url:
@@ -1453,19 +1596,18 @@ def load_signal_linkage(base_url: str, key: str | None, db_url: str | None) -> d
             outcomes = _rest_latest_count(base_url, key, "signal_trade_outcomes", stamp)
             if outcomes is not None:
                 break
-    if artifact is None and outcomes is None and db_url:
-        artifact_row = _sql_optional(
-            db_url,
-            "select count(*)::int as n, max(generated_at) as latest from public.signal_artifacts",
-        )
-        outcome_row = _sql_optional(
-            db_url,
-            "select count(*)::int as n from public.signal_trade_outcomes",
-        )
-        if artifact_row:
-            artifact = (artifact_row[0].get("n"), artifact_row[0].get("latest"))
-        if outcome_row:
-            outcomes = (outcome_row[0].get("n"), None)
+        if artifact is None:
+            counted = _rest_count(base_url, key, "signal_artifacts")
+            if counted is not None:
+                artifact = (counted, None)
+        if outcomes is None:
+            counted = _rest_count(base_url, key, "signal_trade_outcomes")
+            if counted is not None:
+                outcomes = (counted, None)
+    if artifact is None and db_url:
+        artifact = _sql_count_pair(db_url, "signal_artifacts")
+    if outcomes is None and db_url:
+        outcomes = _sql_count_pair(db_url, "signal_trade_outcomes")
     if artifact is None and outcomes is None:
         return unknown_linkage(
             "signal_artifacts and signal_trade_outcomes were not read. Counts are not estimated."
@@ -1509,7 +1651,10 @@ def build_model_scorecard(
         )
     scanned = fee_drag_from_rows(trades if isinstance(trades, list) else [])
     if isinstance(fee_drag, dict) and fee_drag.get("status") == "known":
-        fees = fee_drag
+        fees = dict(fee_drag)
+        note = str(fees.get("note") or "")
+        if "95 bps" not in note:
+            fees["note"] = (note + " " + LIVE_FEE_HANDOFF).strip()
     elif isinstance(scanned, dict) and scanned.get("status") == "known":
         fees = scanned
     elif isinstance(fee_drag, dict) and fee_drag.get("status") == "unknown":
@@ -1555,6 +1700,43 @@ def build_model_scorecard(
             "Scrubbed Pages JSON has no signal_artifacts or signal_trade_outcomes counts. Not estimated."
         ),
     }
+
+
+def _fee_rows_for_tape(rows: list) -> list:
+    """Match keys and fee dollars only. Order ids are dropped."""
+    public = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        public.append(
+            {
+                "sleeve": row.get("sleeve") or "crypto",
+                "timestamp_et": row.get("timestamp_et"),
+                "ticker": row.get("ticker"),
+                "side": row.get("side"),
+                "fee_usd": row.get("fee_usd", row.get("fee")),
+                "notional_usd": row.get("notional_usd"),
+            }
+        )
+    return public
+
+
+def _rest_crypto_facts(base_url: str, key: str) -> list | None:
+    for select in CRYPTO_FACT_SELECTS:
+        rows: list = []
+        for offset in range(0, 10000, 1000):
+            query = f"sleeve=eq.crypto&select={select}&limit=1000&offset={offset}"
+            chunk = _rest_optional(base_url, key, query)
+            if chunk is None:
+                rows = []
+                break
+            rows.extend(chunk)
+            if len(chunk) < 1000:
+                return rows
+        else:
+            if rows:
+                return rows
+    return None
 
 
 def _rest_optional(base_url: str, key: str, query: str):
@@ -1610,27 +1792,35 @@ def _normalize_fact_rows(rows: list) -> list:
 
 
 def crypto_scorecard_facts(base_url: str, key: str | None, db_url: str | None) -> dict:
-    """Best-effort warehouse fees and order-id-unique sells. Never raises.
+    """Warehouse fees and order-id-unique sells.
 
     The result has aggregates only. Order ids are dropped before return.
+    A missing credential leaves a clear unknown note. A successful read that
+    includes fee amounts returns status known and does not keep the scrubbed
+    UNKNOWN note.
     """
     rows = None
     if key:
-        for query in CRYPTO_FACT_QUERIES:
-            rows = _rest_optional(base_url, key, query)
-            if rows is not None:
-                break
+        rows = _rest_crypto_facts(base_url, key)
     if rows is None and db_url:
         for sql in CRYPTO_FACT_SQL:
             rows = _sql_optional(db_url, sql)
             if rows is not None:
                 break
     if rows is None:
+        if not key and not db_url:
+            note = (
+                "No warehouse credential on this export. kpi_trades.fee_usd was not read. Not estimated."
+            )
+        else:
+            note = (
+                "Warehouse credentials were set but kpi_trades fee columns were not returned. "
+                "Fee drag stays unknown for this run. Not estimated."
+            )
         return {
-            "fee_drag": unknown_fee(
-                "Warehouse fee columns were not read. The scrubbed tape has no fee field. Not estimated."
-            ),
+            "fee_drag": unknown_fee(note),
             "order_id_unique": None,
+            "fee_rows": [],
         }
     fees = fee_drag_from_rows(rows) or unknown_fee(
         "Crypto trades were read and no fee amount was present. Not estimated."
@@ -1653,7 +1843,7 @@ def crypto_scorecard_facts(base_url: str, key: str | None, db_url: str | None) -
                 "expectancy_usd": stats["expectancy_usd"],
                 "note": "Unique order id among crypto sells. The headline Win % stays the scrubbed tape.",
             }
-    return {"fee_drag": fees, "order_id_unique": unique}
+    return {"fee_drag": fees, "order_id_unique": unique, "fee_rows": _fee_rows_for_tape(rows)}
 
 
 def write_model_scorecard(target: Path, bundle: dict) -> None:
@@ -2015,8 +2205,93 @@ def self_test() -> int:
         raise RuntimeError(f"fills {card['closed_fills']}")
     if card["fee_drag"]["status"] != "known" or card["fee_drag"]["fee_usd"] != 1.0:
         raise RuntimeError(f"fees {card['fee_drag']}")
+    if "95 bps" not in card["fee_drag"]["note"] or "190 RT" not in card["fee_drag"]["note"] or "T24d" not in card["fee_drag"]["note"]:
+        raise RuntimeError(f"fee handoff {card['fee_drag']['note']}")
     if card["oos"]["fee_bps"] != 30 or [row["model"] for row in card["oos"]["models"]] != ["rules", "logistic", "lgbm"]:
         raise RuntimeError(f"oos {card['oos']}")
+    if "30 bp" not in card["oos"]["note"] or "95 bps" not in card["oos"]["note"] or "190 RT" not in card["oos"]["note"]:
+        raise RuntimeError(f"oos handoff {card['oos']['note']}")
+    kept = build_model_scorecard(
+        summary=[],
+        trades=[{"sleeve": "crypto", "side": "sell", "pnl_frac_of_book": 0.01}],
+        models={},
+        oos={"rows": []},
+        fee_drag={
+            "status": "known",
+            "fee_usd": 4.5,
+            "sell_fee_usd": 2.0,
+            "fee_frac": 0.015,
+            "n": 10,
+            "seed_usd": 300,
+            "note": "from warehouse",
+        },
+    )
+    if kept["fee_drag"]["status"] != "known" or kept["fee_drag"]["fee_usd"] != 4.5:
+        raise RuntimeError(f"warehouse fees were replaced {kept['fee_drag']}")
+    if "95 bps" not in kept["fee_drag"]["note"] or '"order_id"' in json.dumps(kept):
+        raise RuntimeError("known fee drag dropped the handoff or wrote an id")
+    ratio_rows = [
+        {"sleeve": "crypto", "side": "buy", "fee_usd": "0.95", "notional_usd": "100", "order_id": "a"},
+        {"sleeve": "crypto", "side": "sell", "fee_usd": "0.95", "notional_usd": "100", "order_id": "b"},
+        {"sleeve": "crypto", "side": "buy", "fee_usd": "0.95", "notional_usd": "100", "order_id": "c"},
+        {"sleeve": "crypto", "side": "sell", "fee_usd": "0", "notional_usd": "100", "order_id": "d"},
+    ]
+    measured = fee_drag_from_rows(ratio_rows)
+    if measured["status"] != "known" or measured["n"] != 4 or measured["fee_usd"] != 2.85:
+        raise RuntimeError(f"fee sum {measured}")
+    if "This read median 95 bps/leg" not in measured["note"] or "~190 RT" not in measured["note"]:
+        raise RuntimeError(f"median note {measured['note']}")
+    taped = attach_fee_frac(
+        [
+            {
+                "sleeve": "crypto",
+                "ticker": "BTC",
+                "side": "buy",
+                "timestamp_et": "2026-09-28T00:00:00+00:00",
+                "pnl_frac_of_book": 0,
+                "order_id": "should-drop",
+                "fee_usd": "2.85",
+            }
+        ],
+        [],
+    )
+    if taped[0].get("fee_frac_of_book") != float(q6(Decimal("2.85") / Decimal("300"))):
+        raise RuntimeError(f"fee frac {taped}")
+    if "fee_usd" in taped[0] or "order_id" in taped[0]:
+        raise RuntimeError(f"raw fee leaked {taped}")
+    matched = attach_fee_frac(
+        [
+            {
+                "sleeve": "crypto",
+                "ticker": "btc",
+                "side": "buy",
+                "timestamp_et": "2026-09-28T00:00:00Z",
+                "pnl_frac_of_book": 0,
+            }
+        ],
+        [
+            {
+                "sleeve": "crypto",
+                "ticker": "BTC",
+                "side": "buy",
+                "timestamp_et": "2026-09-28T00:00:00+00:00",
+                "fee_usd": "2.85",
+                "order_id": "do-not-copy",
+            }
+        ],
+    )
+    if matched[0].get("fee_frac_of_book") != taped[0]["fee_frac_of_book"] or "order_id" in matched[0] or "fee_usd" in matched[0]:
+        raise RuntimeError(f"matched fee {matched}")
+    missed = crypto_scorecard_facts("https://example.invalid", None, None)
+    if missed["fee_drag"]["status"] != "unknown" or "credential" not in missed["fee_drag"]["note"].lower():
+        raise RuntimeError(f"missing credential note {missed['fee_drag']}")
+    if missed["fee_drag"]["fee_usd"] is not None:
+        raise RuntimeError("missing credential invented a fee")
+    for relative in (".github/workflows/export-kpi.yml", "scripts/export-kpi.yml"):
+        workflow = (ROOT / relative).read_text(encoding="utf-8")
+        commit = workflow.split("Commit refreshed JSON", 1)[1].split("Publish export failure", 1)[0]
+        if "data/model_scorecard.json" not in commit:
+            raise RuntimeError(f"{relative} does not git add data/model_scorecard.json")
     if card["kill"]["kill_headroom_stored"] != 1.25 or card["kill"]["kill_headroom_frac"] != 0.0125:
         raise RuntimeError(f"kill {card['kill']}")
     if card["kill"]["kill_headroom_usd"] != 3.75 or card["kill"]["day_kill_usd"] != -30.0:
