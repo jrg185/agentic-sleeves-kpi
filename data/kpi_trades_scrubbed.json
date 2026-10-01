@@ -1380,6 +1380,18 @@
     "fee_frac_of_book": 0.0007
   },
   {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-10-01T09:56:39.331033+00:00",
+    "ticker": "STRK",
+    "side": "sell",
+    "notional_frac_of_book": 0.059,
+    "pnl_frac_of_book": -0.000594,
+    "why": "artifact sell (ml P(up)~0.38); spot exit/reduce on fresh artifact 8efd3a18",
+    "running_pnl_frac": 0.053003,
+    "running_balance_frac": 1.053003,
+    "fee_frac_of_book": 0.0
+  },
+  {
     "sleeve": "equities",
     "timestamp_et": "2026-09-25T19:37:00+00:00",
     "ticker": "QCOM",
