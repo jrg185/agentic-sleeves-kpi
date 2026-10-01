@@ -99,6 +99,7 @@ test("csv uses human-preferred why and escapes commas and quotes", () => {
       ticker: "GRT",
       side: "sell",
       notional: "$31.17 (10.39%)",
+      fee: "$0.29",
       tradePnl: "+$0.91",
       runningPnl: "+$31.91",
       runningBalance: "$331.91",
@@ -109,6 +110,7 @@ test("csv uses human-preferred why and escapes commas and quotes", () => {
       ticker: "CRV",
       side: "sell",
       notional: "$21.46 (7.15%)",
+      fee: "",
       tradePnl: "-$0.91",
       runningPnl: "+$31.01",
       runningBalance: "$331.01",
@@ -118,9 +120,9 @@ test("csv uses human-preferred why and escapes commas and quotes", () => {
   const lines = csv.trim().split("\r\n");
   assert.equal(
     lines[0],
-    "time,ticker,side,notional,trade pnl,running pnl,running balance,why"
+    "time,ticker,side,notional,fee,trade pnl,running pnl,running balance,why"
   );
-  assert.match(lines[1], /^"Sep 28, 2:06 AM",GRT,sell,\$31\.17 \(10\.39%\),\+\$0\.91/);
+  assert.match(lines[1], /^"Sep 28, 2:06 AM",GRT,sell,\$31\.17 \(10\.39%\),\$0\.29,\+\$0\.91/);
   assert.match(lines[1], /"trail breach \(bc-b76ce034 \/ PR#50\), ""full exit"""/);
   assert.match(lines[2], /,sync order$/);
   assert.doesNotMatch(lines[2], /RH Agentic sync order/);

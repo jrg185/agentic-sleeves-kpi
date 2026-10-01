@@ -86,6 +86,10 @@ Each order object:
   fee_charged            Same.
   fees                   Optional list of {"fee_data": {"fee_amount": "..."}}.
                          Summed only when fee and fee_charged are absent.
+                         On conflict, a positive explicit fee fills fee_usd
+                         when the stored fee is null or zero. why/notes rules
+                         stay as they are. A missing fee is not written as a
+                         replacement for a stored positive fee.
   executions             Optional list of {"timestamp": "..."}. The latest
                          timestamp is timestamp_et.
   created_at             Used when executions have no timestamp.
@@ -212,7 +216,19 @@ WRITE_COLUMNS = (
     "notes",
     "order_id",
 )
-UPSERT_SQL = """
+WHY_OPEN_SQL = """(
+    kpi_trades.why is null
+    or btrim(kpi_trades.why) = ''
+    or kpi_trades.why ~* '^RH Agentic (backfill|sync) order [0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+)"""
+# Positive incoming fee fills a null or zero stored fee. A zero payload does
+# not clear a stored positive fee. why/notes still follow WHY_OPEN_SQL only.
+FEE_REFRESH_SQL = """(
+    excluded.fee_usd is not null
+    and excluded.fee_usd > 0
+    and (kpi_trades.fee_usd is null or kpi_trades.fee_usd = 0)
+)"""
+UPSERT_SQL = f"""
 insert into public.kpi_trades (
     sleeve, timestamp_et, ticker, side, qty, avg_price,
     notional_usd, fee_usd, pnl_trade_usd, why, notes, order_id
@@ -222,16 +238,25 @@ insert into public.kpi_trades (
 )
 on conflict (order_id) do update
 set
-    why = excluded.why,
-    notes = coalesce(excluded.notes, kpi_trades.notes)
-where excluded.why is not null
-  and (
-    kpi_trades.why is null
-    or btrim(kpi_trades.why) = ''
-    or kpi_trades.why ~* '^RH Agentic (backfill|sync) order [0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-  )
+    why = case
+        when excluded.why is not null and {WHY_OPEN_SQL}
+        then excluded.why
+        else kpi_trades.why
+    end,
+    notes = case
+        when excluded.why is not null and {WHY_OPEN_SQL}
+        then coalesce(excluded.notes, kpi_trades.notes)
+        else kpi_trades.notes
+    end,
+    fee_usd = case
+        when {FEE_REFRESH_SQL}
+        then excluded.fee_usd
+        else kpi_trades.fee_usd
+    end
+where (excluded.why is not null and {WHY_OPEN_SQL})
+   or {FEE_REFRESH_SQL}
 """
-UPSERT_SQL_NO_NOTES = """
+UPSERT_SQL_NO_NOTES = f"""
 insert into public.kpi_trades (
     sleeve, timestamp_et, ticker, side, qty, avg_price,
     notional_usd, fee_usd, pnl_trade_usd, why, order_id
@@ -240,13 +265,26 @@ insert into public.kpi_trades (
     %(notional_usd)s, %(fee_usd)s, %(pnl_trade_usd)s, %(why)s, %(order_id)s
 )
 on conflict (order_id) do update
-set why = excluded.why
-where excluded.why is not null
-  and (
-    kpi_trades.why is null
-    or btrim(kpi_trades.why) = ''
-    or kpi_trades.why ~* '^RH Agentic (backfill|sync) order [0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-  )
+set
+    why = case
+        when excluded.why is not null and {WHY_OPEN_SQL}
+        then excluded.why
+        else kpi_trades.why
+    end,
+    fee_usd = case
+        when {FEE_REFRESH_SQL}
+        then excluded.fee_usd
+        else kpi_trades.fee_usd
+    end
+where (excluded.why is not null and {WHY_OPEN_SQL})
+   or {FEE_REFRESH_SQL}
+"""
+FEE_BACKFILL_SQL = """
+update public.kpi_trades
+set fee_usd = %(fee_usd)s
+where order_id = %(order_id)s
+  and %(fee_usd)s::numeric > 0
+  and (fee_usd is null or fee_usd = 0)
 """
 NOTE_UPDATE_SQL = """
 update public.kpi_trades
@@ -435,6 +473,24 @@ def is_funding(ticker: str, quote: str) -> bool:
     return ticker in {"USDC", "USD"} or quote == "USDC"
 
 
+def fee_is_explicit(order: dict) -> bool:
+    """True when the payload carried a fee. An absent fee is not a zero."""
+    if dec(order.get("fee")) is not None:
+        return True
+    if dec(order.get("fee_charged")) is not None:
+        return True
+    fees = order.get("fees")
+    if not isinstance(fees, list):
+        return False
+    for item in fees:
+        if not isinstance(item, dict):
+            continue
+        data = item.get("fee_data")
+        if isinstance(data, dict) and dec(data.get("fee_amount")) is not None:
+            return True
+    return False
+
+
 def fee_of(order: dict) -> Decimal:
     direct = dec(order.get("fee"))
     if direct is not None:
@@ -530,6 +586,7 @@ def map_order(order: dict) -> dict | None:
         "avg_price": num_text(price),
         "notional_usd": num_text(notional_of(order, qty, price)),
         "fee_usd": num_text(fee_of(order)),
+        "fee_explicit": fee_is_explicit(order),
         "pnl_trade_usd": "0",
         "why": human_note(order.get("why")) or note,
         "notes": note,
@@ -621,8 +678,38 @@ def assign_pnl(existing: list[dict], new_rows: list[dict]) -> list[dict]:
 
 
 def rows_from_orders(orders: list[dict], existing: list[dict]) -> list[dict]:
-    fresh, _fills = plan_sync(orders, existing)
+    fresh, _fills, _fees = plan_sync(orders, existing)
     return fresh
+
+
+def fee_backfill_for(mapped: list[dict], existing: list[dict]) -> list[dict]:
+    """Positive explicit fees for stored rows whose fee_usd is null or zero.
+
+    Does not touch why or notes. A payload with no fee field is skipped.
+    A stored positive fee is left in place.
+    """
+    index: dict[str, dict] = {}
+    for row in existing:
+        order_id = str(row.get("order_id") or "").strip().lower()
+        if order_id and order_id not in index:
+            index[order_id] = row
+    patches = []
+    seen: set[str] = set()
+    for row in mapped:
+        order_id = str(row.get("order_id") or "").strip().lower()
+        if not order_id or order_id in seen or order_id not in index:
+            continue
+        seen.add(order_id)
+        if not row.get("fee_explicit"):
+            continue
+        incoming = dec(row.get("fee_usd"))
+        if incoming is None or incoming <= 0:
+            continue
+        stored = dec(index[order_id].get("fee_usd"))
+        if stored is not None and stored != 0:
+            continue
+        patches.append({"order_id": order_id, "fee_usd": num_text(incoming)})
+    return patches
 
 
 def note_fills_for(mapped: list[dict], existing: list[dict]) -> list[dict]:
@@ -657,11 +744,11 @@ def note_fills_for(mapped: list[dict], existing: list[dict]) -> list[dict]:
     return fills
 
 
-def plan_sync(orders: list[dict], existing: list[dict]) -> tuple[list[dict], list[dict]]:
-    """New priced fills, plus note fills for stubs already stored by order_id."""
+def plan_sync(orders: list[dict], existing: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
+    """New priced fills, note fills, and fee backfills for stored order ids."""
     mapped = map_orders(orders)
     fresh = drop_known(mapped, existing)
-    return assign_pnl(existing, fresh), note_fills_for(mapped, existing)
+    return assign_pnl(existing, fresh), note_fills_for(mapped, existing), fee_backfill_for(mapped, existing)
 
 
 def orders_from_payload(payload) -> list[dict]:
@@ -918,7 +1005,7 @@ def rest_call(base_url: str, key: str, path: str, method: str = "GET", body=None
 def fetch_trades_rest(base_url: str, key: str) -> list[dict]:
     rows: list[dict] = []
     page = 1000
-    select = "sleeve,ticker,side,qty,avg_price,timestamp_et,why,pnl_trade_usd,order_id"
+    select = "sleeve,ticker,side,qty,avg_price,timestamp_et,why,pnl_trade_usd,order_id,fee_usd"
     for offset in range(0, page * 20, page):
         path = f"/rest/v1/kpi_trades?select={select}&order=timestamp_et.asc&limit={page}&offset={offset}"
         payload = rest_call(base_url, key, path)
@@ -957,7 +1044,7 @@ def connect_db(db_url: str):
 
 def fetch_trades_db(db_url: str) -> list[dict]:
     sql = """
-        select sleeve, ticker, side, qty, avg_price, timestamp_et, why, pnl_trade_usd, order_id
+        select sleeve, ticker, side, qty, avg_price, timestamp_et, why, pnl_trade_usd, order_id, fee_usd
         from public.kpi_trades
         order by timestamp_et asc
     """
@@ -1095,6 +1182,70 @@ def apply_note_fills(env: dict[str, str], fills: list[dict], source: str) -> int
     if not db_url:
         raise SyncError(MISSING_SB)
     return apply_note_fills_db(db_url, fills)
+
+
+def apply_fee_backfill_rest(base_url: str, key: str, patches: list[dict]) -> int:
+    """PATCH fee_usd only while the stored fee is still null or zero."""
+    written = 0
+    for patch in patches:
+        order_id = str(patch.get("order_id") or "")
+        if not UUID_RE.fullmatch(order_id):
+            raise SyncError("fee backfill order_id is not a uuid")
+        filt = "order_id=eq." + urllib.parse.quote(order_id, safe="")
+        filt += "&or=(fee_usd.is.null,fee_usd.eq.0)"
+        path = "/rest/v1/kpi_trades?" + filt
+        returned = rest_call(
+            base_url,
+            key,
+            path,
+            method="PATCH",
+            body={"fee_usd": patch["fee_usd"]},
+            extra_headers={"Prefer": "return=representation"},
+        )
+        rows = returned if isinstance(returned, list) else []
+        if len(rows) > 1:
+            raise SyncError(f"fee backfill matched {len(rows)} rows")
+        written += len(rows)
+    return written
+
+
+def apply_fee_backfill_db(db_url: str, patches: list[dict]) -> int:
+    written = 0
+    try:
+        with connect_db(db_url) as conn:
+            with conn.cursor() as cur:
+                for patch in patches:
+                    order_id = str(patch.get("order_id") or "")
+                    if not UUID_RE.fullmatch(order_id):
+                        raise SyncError("fee backfill order_id is not a uuid")
+                    cur.execute(FEE_BACKFILL_SQL, {"order_id": order_id, "fee_usd": patch["fee_usd"]})
+                    if cur.rowcount > 1:
+                        raise SyncError(f"fee backfill matched {cur.rowcount} rows")
+                    written += cur.rowcount
+            conn.commit()
+    except SyncError:
+        raise
+    except Exception as exc:
+        raise SyncError("database fee backfill on kpi_trades failed. The sync did not finish.") from exc
+    return written
+
+
+def apply_fee_backfill(env: dict[str, str], patches: list[dict], source: str) -> int:
+    if not patches:
+        return 0
+    key = env.get("SUPABASE_SERVICE_ROLE_KEY") or ""
+    db_url = env.get("SUPABASE_DB_URL") or ""
+    base_url = env.get("SUPABASE_URL") or DEFAULT_URL
+    if key and source == "rest":
+        try:
+            return apply_fee_backfill_rest(base_url, key, patches)
+        except SyncError:
+            if not db_url:
+                raise
+            print("REST fee backfill failed; trying SUPABASE_DB_URL", file=sys.stderr)
+    if not db_url:
+        raise SyncError(MISSING_SB)
+    return apply_fee_backfill_db(db_url, patches)
 
 
 def load_trades(env: dict[str, str]) -> tuple[list[dict], str]:
@@ -1246,11 +1397,15 @@ def sync(
         api_key, private_key, account = creds
         start = query_start(read_cursor(cursor_path) or BOOTSTRAP_CURSOR)
         orders = fetch_filled_orders(api_key, private_key, account, start)
-    fresh, fills = plan_sync(orders, existing)
+    fresh, fills, fee_patches = plan_sync(orders, existing)
     upsert_rows(env, fresh, source)
     noted = apply_note_fills(env, fills, source)
+    fees_written = apply_fee_backfill(env, fee_patches, source)
     remember_cursor(cursor_path, orders)
-    print(f"rh sync warehouse={source} fetched={len(orders)} upserted={len(fresh)} noted={noted}")
+    print(
+        f"rh sync warehouse={source} fetched={len(orders)} upserted={len(fresh)} "
+        f"noted={noted} fee_backfill={fees_written}"
+    )
     return 0
 
 
@@ -1585,6 +1740,82 @@ def self_test() -> int:
         raise SyncError("empty payload would change a human why")
     if note_patch(stub_existing, {"why": None, "notes": None}) is not None:
         raise SyncError("empty payload would clear a machine stub")
+    priced = map_orders(
+        [
+            {
+                "id": sell["order_id"],
+                "currency_code": "AAA",
+                "side": "sell",
+                "state": "filled",
+                "cumulative_quantity": "4",
+                "average_price": "5",
+                "fee": "0.20",
+                "created_at": "2026-09-28T11:00:00Z",
+                "why": "replacement thesis",
+            }
+        ]
+    )
+    if not priced or priced[0].get("fee_explicit") is not True:
+        raise SyncError("explicit fee was not marked")
+    zero_stored = {"order_id": sell["order_id"], "why": "keep this thesis", "fee_usd": "0"}
+    fee_patch = fee_backfill_for(priced, [zero_stored])
+    if fee_patch != [{"order_id": sell["order_id"], "fee_usd": "0.2"}]:
+        raise SyncError(f"null/zero fee was not backfilled {fee_patch}")
+    if fee_backfill_for(priced, [{"order_id": sell["order_id"], "why": "keep this thesis", "fee_usd": None}]) != fee_patch:
+        raise SyncError("null stored fee was not backfilled")
+    if fee_backfill_for(priced, [{"order_id": sell["order_id"], "why": "keep this thesis", "fee_usd": "1.25"}]):
+        raise SyncError("positive stored fee was overwritten")
+    if fee_backfill_for(replacement, [zero_stored]):
+        raise SyncError("a payload with no fee field was treated as a fee")
+    explicit_zero = map_orders(
+        [
+            {
+                "id": sell["order_id"],
+                "currency_code": "AAA",
+                "side": "sell",
+                "state": "filled",
+                "cumulative_quantity": "4",
+                "average_price": "5",
+                "fee": "0",
+                "created_at": "2026-09-28T11:00:00Z",
+            }
+        ]
+    )
+    if not explicit_zero or explicit_zero[0].get("fee_explicit") is not True or explicit_zero[0]["fee_usd"] != "0":
+        raise SyncError(f"explicit zero fee was invented or dropped {explicit_zero}")
+    if fee_backfill_for(explicit_zero, [zero_stored]):
+        raise SyncError("explicit zero replaced a stored fee")
+    if note_fills_for(priced, [zero_stored]):
+        raise SyncError("fee backfill changed a human why")
+    stored_book = {
+        "order_id": sell["order_id"],
+        "why": "keep this thesis",
+        "fee_usd": "0",
+        "sleeve": "crypto",
+        "ticker": "AAA",
+        "side": "sell",
+        "qty": "4",
+        "avg_price": "5",
+        "timestamp_et": "2026-09-28T11:00:00+00:00",
+        "pnl_trade_usd": "12",
+    }
+    fresh_plan, note_plan, fee_plan = plan_sync(
+        [
+            {
+                "id": sell["order_id"],
+                "currency_code": "AAA",
+                "side": "sell",
+                "state": "filled",
+                "cumulative_quantity": "4",
+                "average_price": "5",
+                "fee": "0.20",
+                "created_at": "2026-09-28T11:00:00Z",
+            }
+        ],
+        [stored_book],
+    )
+    if fresh_plan or note_plan or fee_plan != [{"order_id": sell["order_id"], "fee_usd": "0.2"}]:
+        raise SyncError(f"known order was reinserted instead of a fee backfill {fresh_plan} {note_plan} {fee_plan}")
     ledger_id = "12121212-1212-4121-8121-121212121212"
     with_why = map_order(
         {
@@ -1714,8 +1945,14 @@ def self_test() -> int:
     if "excluded.why is not null" not in UPSERT_SQL.lower():
         raise SyncError("conflict update can write an empty why")
     update_set = UPSERT_SQL.lower().split("do update", 1)[1].split("where", 1)[0]
-    if "qty" in update_set or "pnl_trade_usd" in update_set or "avg_price" in update_set:
-        raise SyncError("conflict update writes more than why/notes")
+    if "fee_usd" not in update_set:
+        raise SyncError("conflict update does not refresh fee_usd")
+    if "qty" in update_set or "pnl_trade_usd" in update_set or "avg_price" in update_set or "notional_usd" in update_set:
+        raise SyncError("conflict update writes price or quantity")
+    if "fee_usd" not in UPSERT_SQL_NO_NOTES.lower().split("do update", 1)[1]:
+        raise SyncError("notes-less conflict update does not refresh fee_usd")
+    if "fee_usd is null or fee_usd = 0" not in FEE_BACKFILL_SQL.lower():
+        raise SyncError("fee backfill can overwrite a stored positive fee")
     if "rh agentic (backfill|sync) order" not in UPSERT_SQL.lower():
         raise SyncError("conflict update does not recognize a machine why")
     if "notes" not in UPSERT_SQL or "do update" not in UPSERT_SQL_NO_NOTES.lower():
