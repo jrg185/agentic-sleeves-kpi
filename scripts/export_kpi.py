@@ -895,9 +895,17 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
     rows["crypto_fee_drag"] = facts["fee_drag"]
     rows["order_id_unique"] = facts["order_id_unique"]
     rows["signal_linkage"] = load_signal_linkage(base_url, key, db_url)
+    if isinstance(rows.get("signal_linkage"), dict):
+        # Counts only. Check rebuilds the scorecard from this committed block.
+        rows["meta"]["signal_linkage"] = rows["signal_linkage"]
     rows["kpi_trades_scrubbed"] = attach_fee_frac(
         rows["kpi_trades_scrubbed"], facts.get("fee_rows") or []
     )
+    # The check job has no warehouse secrets. Publish the fee total the scrubbed
+    # tape can reproduce (fee_frac_of_book × seed), not a second dollar sum.
+    tape_fees = fee_drag_from_rows(rows["kpi_trades_scrubbed"])
+    if isinstance(tape_fees, dict) and tape_fees.get("status") == "known":
+        rows["crypto_fee_drag"] = tape_fees
     return rows
 
 
@@ -1214,19 +1222,27 @@ def unknown_fee(note: str) -> dict:
     }
 
 
-def fee_drag_from_rows(rows: list, sleeve: str = "crypto", seed: Decimal = Decimal("300")) -> dict | None:
-    present = None
-    for row in rows or []:
-        if not isinstance(row, dict) or _sleeve_name(row) not in {sleeve, ""}:
+def _fee_dollars(row: dict, seed: Decimal) -> Decimal | None:
+    """Fee dollars from a raw column, or from fee_frac_of_book × sleeve seed.
+
+    The public tape keeps the fraction only. Check rebuilds the scorecard from
+    that fraction and does not need warehouse credentials.
+    """
+    for key in FEE_FIELD_KEYS:
+        if key not in row:
             continue
-        for key in FEE_FIELD_KEYS:
-            if key in row:
-                present = key
-                break
-        if present:
-            break
-    if not present:
+        amount = _decimal_or_none(row.get(key))
+        if amount is not None:
+            return amount
+    if "fee_frac_of_book" not in row or seed in (None, 0):
         return None
+    frac = _decimal_or_none(row.get("fee_frac_of_book"))
+    if frac is None:
+        return None
+    return frac * seed
+
+
+def fee_drag_from_rows(rows: list, sleeve: str = "crypto", seed: Decimal = Decimal("300")) -> dict | None:
     seen: set[str] = set()
     total = Decimal("0")
     sell_total = Decimal("0")
@@ -1240,7 +1256,7 @@ def fee_drag_from_rows(rows: list, sleeve: str = "crypto", seed: Decimal = Decim
             if order_id in seen:
                 continue
             seen.add(order_id)
-        amount = _decimal_or_none(row.get(present))
+        amount = _fee_dollars(row, seed)
         if amount is None:
             continue
         numeric = True
@@ -1250,9 +1266,12 @@ def fee_drag_from_rows(rows: list, sleeve: str = "crypto", seed: Decimal = Decim
             sell_total += amount
     if not numeric:
         return None
-    def usd(value: Decimal) -> float:
-        return float(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
+    def usd(value: Decimal) -> Decimal:
+        return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    rounded = usd(total)
+    rounded_sell = usd(sell_total)
     note = (
         "Sum of crypto fee dollars on the rows that were read. Identifiers are not written. "
         + LIVE_FEE_HANDOFF
@@ -1262,9 +1281,9 @@ def fee_drag_from_rows(rows: list, sleeve: str = "crypto", seed: Decimal = Decim
         note += f" This read median {median_bps} bps/leg (~{median_bps * 2} RT)."
     return {
         "status": "known",
-        "fee_usd": usd(total),
-        "sell_fee_usd": usd(sell_total),
-        "fee_frac": float(q6(total / seed)) if seed else None,
+        "fee_usd": float(rounded),
+        "sell_fee_usd": float(rounded_sell),
+        "fee_frac": float(q6(rounded / seed)) if seed else None,
         "n": n,
         "seed_usd": int(seed),
         "note": note,
@@ -1281,9 +1300,19 @@ def _median_positive_fee_bps(rows: list, sleeve: str = "crypto") -> int | None:
         if fee is None:
             fee = _decimal_or_none(row.get("fee"))
         notional = _decimal_or_none(row.get("notional_usd"))
-        if fee is None or notional is None or fee <= 0 or notional <= 0:
+        if fee is not None and notional is not None and fee > 0 and notional > 0:
+            ratios.append(fee / notional)
             continue
-        ratios.append(fee / notional)
+        fee_frac = _decimal_or_none(row.get("fee_frac_of_book"))
+        notional_frac = _decimal_or_none(row.get("notional_frac_of_book"))
+        if (
+            fee_frac is None
+            or notional_frac is None
+            or fee_frac <= 0
+            or notional_frac <= 0
+        ):
+            continue
+        ratios.append(fee_frac / notional_frac)
     if not ratios:
         return None
     ratios.sort()

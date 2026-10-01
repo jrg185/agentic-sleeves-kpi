@@ -299,12 +299,16 @@ export function closedFillStats(trades, sleeve, seed = SEEDS_USD.crypto) {
   };
 }
 
-function feeAmount(row) {
+function feeAmount(row, seed) {
   for (const key of FEE_KEYS) {
     if (row && Object.prototype.hasOwnProperty.call(row, key)) {
       const amount = finiteFrac(row[key]);
       if (amount != null) return amount;
     }
+  }
+  if (row && Object.prototype.hasOwnProperty.call(row, "fee_frac_of_book") && seed) {
+    const frac = finiteFrac(row.fee_frac_of_book);
+    if (frac != null) return frac * seed;
   }
   return null;
 }
@@ -319,7 +323,9 @@ export function feeDragFromTrades(trades, sleeve = "crypto", seed = SEEDS_USD.cr
   let n = 0;
   for (const trade of rows) {
     if (sleeveKey(trade) !== sleeve) continue;
-    const hasField = FEE_KEYS.some((key) => trade && Object.prototype.hasOwnProperty.call(trade, key));
+    const hasField =
+      FEE_KEYS.some((key) => trade && Object.prototype.hasOwnProperty.call(trade, key)) ||
+      Object.prototype.hasOwnProperty.call(trade || {}, "fee_frac_of_book");
     if (!hasField) continue;
     sawField = true;
     const orderId = String(trade?.order_id || "").trim();
@@ -327,7 +333,7 @@ export function feeDragFromTrades(trades, sleeve = "crypto", seed = SEEDS_USD.cr
       if (seen.has(orderId)) continue;
       seen.add(orderId);
     }
-    const amount = feeAmount(trade);
+    const amount = feeAmount(trade, seed);
     if (amount == null) continue;
     numeric = true;
     total += amount;

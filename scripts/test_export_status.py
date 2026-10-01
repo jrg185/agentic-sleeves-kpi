@@ -176,7 +176,14 @@ class ScorecardTests(unittest.TestCase):
         trades = json.loads((root / "data" / "kpi_trades_scrubbed.json").read_text(encoding="utf-8"))
         models = json.loads((root / "data" / "models.json").read_text(encoding="utf-8"))
         oos = json.loads((root / "data" / "models_oos.json").read_text(encoding="utf-8"))
-        built = export_kpi.build_model_scorecard(summary, trades, models, oos)
+        meta = json.loads((root / "data" / "meta.json").read_text(encoding="utf-8"))
+        built = export_kpi.build_model_scorecard(
+            summary,
+            trades,
+            models,
+            oos,
+            signal_linkage=meta.get("signal_linkage"),
+        )
         committed = json.loads((root / "data" / "model_scorecard.json").read_text(encoding="utf-8"))
         self.assertEqual(committed, built)
         self.assertEqual(built["live_backend"]["id"], "rules")
@@ -187,12 +194,16 @@ class ScorecardTests(unittest.TestCase):
         self.assertEqual(built["closed_fills"]["losses"], 18)
         self.assertEqual(built["closed_fills"]["expectancy_usd"], 0.71)
         self.assertEqual(built["closed_fills"]["dedupe"], "scrubbed-rows")
-        self.assertEqual(built["fee_drag"]["status"], "unknown")
-        self.assertIsNone(built["fee_drag"]["fee_usd"])
-        self.assertEqual(built["signal_linkage"]["status"], "unknown")
-        self.assertIsNone(built["signal_linkage"]["artifact_count"])
-        self.assertIsNone(built["signal_linkage"]["outcome_count"])
-        self.assertIsNone(built["signal_linkage"]["last_generated_at"])
+        self.assertEqual(built["fee_drag"]["status"], "known")
+        self.assertEqual(built["fee_drag"]["fee_usd"], 16.64)
+        self.assertEqual(built["fee_drag"]["sell_fee_usd"], 6.53)
+        self.assertEqual(built["fee_drag"]["n"], 106)
+        self.assertEqual(built["fee_drag"]["fee_frac"], 0.055467)
+        self.assertIn("95 bps/leg", built["fee_drag"]["note"])
+        self.assertEqual(built["signal_linkage"]["status"], "known")
+        self.assertEqual(built["signal_linkage"]["artifact_count"], 8)
+        self.assertEqual(built["signal_linkage"]["outcome_count"], 0)
+        self.assertEqual(built["signal_linkage"]["last_generated_at"], "2026-10-01T00:58:40+00:00")
         self.assertEqual(built["oos"]["fee_bps"], 30)
         self.assertIn("95 bps/leg", built["oos"]["note"])
         self.assertIn("190 RT", built["oos"]["note"])
@@ -202,7 +213,7 @@ class ScorecardTests(unittest.TestCase):
         crypto = next(row for row in summary if row["sleeve"] == "crypto")
         self.assertEqual(built["kill"]["kill_headroom_stored"], crypto["kill_headroom_frac"])
         self.assertEqual(built["kill"]["kill_headroom_frac"], crypto["kill_headroom_frac"] / 100)
-        self.assertEqual(built["kill"]["kill_headroom_usd"], 3.88)
+        self.assertEqual(built["kill"]["kill_headroom_usd"], 4.04)
         self.assertEqual(built["kill"]["day_kill_pct"], crypto["day_kill_pct"])
         self.assertEqual(built["kill"]["day_target_pct"], crypto["day_target_pct"])
         blob = json.dumps(built)
