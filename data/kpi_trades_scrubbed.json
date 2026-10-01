@@ -1252,5 +1252,16 @@
     "why": "preclose AI infra swing: Vultr $1.2B order + networking outlook raise; pullback off HOD",
     "running_pnl_frac": -0.024022,
     "running_balance_frac": 0.975978
+  },
+  {
+    "sleeve": "equities",
+    "timestamp_et": "2026-10-01T00:06:30.231414+00:00",
+    "ticker": "HPE",
+    "side": "sell",
+    "notional_frac_of_book": 0.25704,
+    "pnl_frac_of_book": -0.00276,
+    "why": "FLATTEN Joe/Wags 2026-09-30 \u2014 close all equities; Crypto owns book",
+    "running_pnl_frac": -0.026782,
+    "running_balance_frac": 0.973218
   }
 ]
