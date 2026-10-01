@@ -1296,6 +1296,42 @@
     "fee_frac_of_book": 0.0
   },
   {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-10-01T01:50:15.242024+00:00",
+    "ticker": "AVAX",
+    "side": "sell",
+    "notional_frac_of_book": 0.072433,
+    "pnl_frac_of_book": -0.001952,
+    "why": "artifact sell ml LGBM P(up 8h)=0.40 < buy>=0.58; spot exit/reduce (conv 0.601)",
+    "running_pnl_frac": 0.082554,
+    "running_balance_frac": 1.082554,
+    "fee_frac_of_book": 0.0007
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-10-01T01:50:15.665097+00:00",
+    "ticker": "IMX",
+    "side": "sell",
+    "notional_frac_of_book": 0.045467,
+    "pnl_frac_of_book": -0.004301,
+    "why": "artifact sell ml LGBM P(up 8h)=0.39 < buy>=0.58; spot exit/reduce (conv 0.609); NOT a re-scale \u2014 full exit of leftover",
+    "running_pnl_frac": 0.078253,
+    "running_balance_frac": 1.078253,
+    "fee_frac_of_book": 0.0
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-10-01T01:50:17.912386+00:00",
+    "ticker": "XLM",
+    "side": "sell",
+    "notional_frac_of_book": 0.084133,
+    "pnl_frac_of_book": -9.6e-05,
+    "why": "artifact sell ml LGBM P(up 8h)=0.40 < buy>=0.58; spot exit/reduce (conv 0.603)",
+    "running_pnl_frac": 0.078157,
+    "running_balance_frac": 1.078157,
+    "fee_frac_of_book": 0.0008
+  },
+  {
     "sleeve": "equities",
     "timestamp_et": "2026-09-25T19:37:00+00:00",
     "ticker": "QCOM",
