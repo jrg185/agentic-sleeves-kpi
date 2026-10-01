@@ -21,7 +21,7 @@
     {
       "sleeve": "equities",
       "name": "lgbm_equity_v1",
-      "used": "Research score for the $500 equity sleeve. The desk CLI stays on rules until place is unlocked. This page does not place orders.",
+      "used": "Paused. Equity modeling and place are not live. This card keeps the last published research read for the legacy $500 divisor. This page does not place orders.",
       "training": "Purged walk-forward LightGBM, calibrated, versus logistic regression and HistGradientBoosting. Horizon 10 sessions, 30 bp round trip. Lagged DGS10, T10Y2Y, and HY OAS.",
       "data_source": "yfinance then Stooq daily bars. FRED macros lagged one observation.",
       "oos": {

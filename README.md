@@ -1,6 +1,6 @@
 # The Book
 
-Read-only dashboard for The Book: **Crypto**, **Equities**, and **combined**.
+Read-only dashboard for The Book. **Crypto** is the live Agentic sleeve. **Equities** is paused. The combined row is the legacy sum while that flatten is still open.
 
 The page is static. It does not place orders, and it does not call Supabase from the browser.
 
@@ -9,7 +9,9 @@ The page is static. It does not place orders, and it does not call Supabase from
 
 ## What the board shows
 
-For each desk and the combined book:
+Crypto is the live sleeve. Equities modeling and place are paused. Open equity names (PBR, BA, AIG) are an unwind, queued for regular hours. Combined is that legacy sum, not a second live book.
+
+For each row:
 
 - Start (the book seed)
 - Running balance (book): cash + mark-to-market of open positions. Until true MTM, book = start + running P&L, so the fraction is `(start + running_pnl) / start`. It is not cash left after a fill.
@@ -23,15 +25,17 @@ Dollar figures are **seed × fraction**. The scrubbed JSON does not need raw boo
 
 | Desk | Seed used when the row has no start/seed |
 | --- | --- |
-| Crypto | $300 |
-| Equities | $500 |
-| Combined | $800 |
+| Crypto | $300, the scrubbed divisor already on the page. Not a newly invented full-book dollar amount. |
+| Equities | $500, the legacy divisor for the paused desk. Not an active seed. |
+| Combined | $800, the legacy sum of those two divisors. Not a second live book. |
 
-Rails encoded in the sample (fractions of that seed):
+After PBR, BA, and AIG flatten, crypto keeps the −10% day kill and +2.5% day target, and those percents apply to the full Agentic book (crypto cash and USDC). This page does not invent the post-flatten seed. Dollars stay seed × fraction from the scrubbed row.
 
-- Crypto day kill `-0.10` (−10%, −$30) and day target `0.025` (+2.5%, +$7.50, realized only)
-- Equities day kill `-0.25` (−25%, −$125)
-- Combined kill headroom `155/800` of book. The kill percent itself stays per desk.
+Rails on the current snapshot (fractions of the scrubbed seed):
+
+- Crypto day kill `-0.10` (−10%) and day target `0.025` (+2.5%, realized only)
+- Equities day kill `-0.25` stays on the paused sleeve until the flatten clears
+- Combined has no kill percent of its own. The kill percent stays on the sleeve row.
 
 ## Data path
 
@@ -59,7 +63,7 @@ Workflow: [`.github/workflows/export-kpi.yml`](.github/workflows/export-kpi.yml)
 - A fill payload, or a secrets-backed hourly poll, upserts `public.kpi_trades`, then the same run refreshes `kpi_sleeve_snapshots` and exports. A bad requested payload, or a failed refresh, does not commit KPI JSON
 - Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. `SUPABASE_DB_URL` is optional
 - Crypto marks: public Coinbase ticker, then Yahoo `{SYMBOL}-USD`. Equities marks: Finnhub when `FINNHUB_API_KEY` is set, then Yahoo chart. CoinStats and Alpha Vantage are later fallbacks when those keys are set
-- Writes `data/kpi_summary.json`, `data/kpi_trades_scrubbed.json`, `data/models_oos.json`, and `data/meta.json` when they changed
+- Writes `data/kpi_summary.json`, `data/kpi_trades_scrubbed.json`, `data/models_oos.json`, `data/model_scorecard.json`, and `data/meta.json` when they changed
 - Does not rewrite `data/models.json`
 - Does not deploy Pages and does not change the Pages source
 
@@ -94,7 +98,7 @@ The live `kpi_summary` view uses warehouse names. Export remaps them onto the pa
 | --- | --- |
 | `sleeve` | `crypto`, `equities`, or `combined` |
 | `as_of` | Snapshot timestamp |
-| `running_balance_frac` | Sleeve book ÷ seed. Sheet desks: crypto 1.079233 ($323.77 / $300, realized +$6.24), equities 1.00174 ($500.87 / $500), combined 1.0308 ($824.64 / $800). |
+| `running_balance_frac` | Sleeve book ÷ seed. Legacy sheet example, not a live two-desk book: crypto 1.079233 ($323.77 / $300), equities 1.00174 ($500.87 / $500), combined 1.0308 ($824.64 / $800). |
 | `running_pnl_frac` | Running P&L ÷ seed |
 | `day_pnl_frac` | Day P&L ÷ seed, or null |
 | `day_kill_pct` | Kill rail as a fraction of book (`-0.10` = −10%). Percent points such as `-10` are also accepted. |
@@ -125,6 +129,8 @@ The exporter drops `email`, `phone`, `order_id`, `account_id`, `user_id`, `api_k
 `models_oos` is optional. The exporter does not fail the job when that view is absent.
 
 The Models tab reads `data/models.json` (same shape in `fixtures/models.json`). Each card has `name`, `sleeve`, `used`, `training`, `data_source`, and `oos` (`window`, `hit_rate`, `avg_return`, `n`, `note`). Until T04 publishes metrics, `oos.status` is `placeholder` and the three numbers stay null. Replacing the file is enough; the page does not need a code change.
+
+The crypto scorecard on that tab is T24e. It reads the scrubbed tape, `data/kpi_summary.json`, `data/models.json`, and `data/models_oos.json`. Export also writes `data/model_scorecard.json` so a warehouse fee sum, and `signal_artifacts` / `signal_trade_outcomes` counts, can land without putting order ids or a service role in the browser. Closed-fill win rate uses the same rule as sleeve Win %: crypto sells, finite P&L, flat zero excluded. The scrubbed tape has no order id, so those rows are not collapsed. T24b will improve joined-fill metrics. Fee drag is UNKNOWN when no fee column is present. Artifact and outcome counts are UNKNOWN until that export can read them. Out-of-sample after-cost is labeled 30 bp until T24d fee-corrects it. The live backend stays `--backend rules` while LightGBM is promoted and unused. The equities card stays the last published research read. Modeling and place on that desk are paused.
 
 ### Secrets
 

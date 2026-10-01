@@ -1,11 +1,15 @@
 import { buildChart, sampleAt } from "./curves.js";
 import {
+  closedFillStats,
+  cryptoOosModels,
   deriveSleeve,
+  feeDragFromTrades,
   formatPct,
   formatUsd,
   formatWinPct,
   formatWinRecord,
   headroomFill,
+  inferLiveBackend,
   labelFor,
   money,
   sleeveKey,
@@ -216,6 +220,8 @@ function renderSleeve(derived, { hero = false, trades = [] } = {}) {
   }
   card.append(head);
 
+  const status = sleeveStatus(derived.sleeve);
+  if (status) head.append(el("p", `chip ${status.className}`, status.label));
   const grid = el("div", "metrics");
   const balance = metric(
     "Running balance (book)",
@@ -223,11 +229,13 @@ function renderSleeve(derived, { hero = false, trades = [] } = {}) {
     tone(derived.runningBalance)
   );
   balance.append(el("p", "fine", "book = start + realized + unrealized"));
+  const start = metric("Start", formatUsd(derived.seed));
+  start.append(el("p", "fine", seedFine(derived.sleeve)));
   grid.append(
     splitPnl("Realized P&L", derived.realizedPnl, derived.realizedPnlFrac, "closed exits"),
     splitPnl("Unrealized P&L", derived.unrealizedPnl, derived.unrealizedPnlFrac, "open MTM"),
     balance,
-    metric("Start", formatUsd(derived.seed))
+    start
   );
 
   grid.append(metric("Day P&L", formatUsd(derived.dayPnl, { signed: true }), tone(derived.dayPnl)));
@@ -276,7 +284,36 @@ function renderSleeve(derived, { hero = false, trades = [] } = {}) {
 
   card.append(grid);
   if (derived.note) card.append(el("p", "note", String(derived.note)));
+  const realign = sleeveRealignNote(derived.sleeve);
+  if (realign) card.append(el("p", "note", realign));
   return card;
+}
+
+function sleeveStatus(sleeve) {
+  if (sleeve === "crypto") return { className: "live", label: "Live" };
+  if (sleeve === "equities") return { className: "paused", label: "Paused" };
+  if (sleeve === "combined") return { className: "paused", label: "Legacy sum" };
+  return null;
+}
+
+function seedFine(sleeve) {
+  if (sleeve === "crypto") return "Scrubbed seed on this row. Not a new full-book dollar amount.";
+  if (sleeve === "equities") return "Legacy scrubbed seed. The desk is paused.";
+  if (sleeve === "combined") return "Legacy sum of the scrubbed sleeve seeds.";
+  return "Scrubbed seed on this row.";
+}
+
+function sleeveRealignNote(sleeve) {
+  if (sleeve === "crypto") {
+    return "Crypto is the live sleeve. The \u221210% kill and +2.5% target stay the rails for the full Agentic book after the equity flatten. Dollars on this card use the scrubbed seed already in the snapshot. PBR, BA, and AIG are still queued for regular hours.";
+  }
+  if (sleeve === "equities") {
+    return "Paused. Equity modeling and place are not live. Crypto owns the Agentic book. Open names are an unwind, queued to flat.";
+  }
+  if (sleeve === "combined") {
+    return "Legacy sum while the equity flatten is still open. Crypto is the live sleeve. This row is not a second book in trade.";
+  }
+  return "";
 }
 
 function readFrac(row, key) {
@@ -452,6 +489,15 @@ function renderTape(sleeve, trades) {
 
   head.append(heading, exportBtn);
   section.append(head);
+  if (sleeve === "equities") {
+    section.append(
+      el(
+        "p",
+        "note",
+        "Paused tape. Equity place is not live. Crypto owns the Agentic book. PBR, BA, and AIG are still queued for regular hours."
+      )
+    );
+  }
 
   if (!trades.length) {
     panel.append(el("p", "empty", "No scrubbed fills."));
@@ -550,7 +596,13 @@ function formatQty(value) {
   return n.toLocaleString("en-US", { maximumFractionDigits: 8 });
 }
 
-function renderPositionTable(title, rows, { showSleeve, sleeve }) {
+const RTH_UNWIND = new Set(["PBR", "BA", "AIG"]);
+
+function unwindLabel(ticker) {
+  return RTH_UNWIND.has(String(ticker || "").trim().toUpperCase()) ? "Queued RTH" : "Unwind";
+}
+
+function renderPositionTable(title, rows, { showSleeve, sleeve, unwind = false }) {
   const section = el("section", "pos");
   const heading = el("h3");
   const toggle = document.createElement("button");
@@ -588,6 +640,7 @@ function renderPositionTable(title, rows, { showSleeve, sleeve }) {
   const labels = showSleeve
     ? ["Sleeve", "Ticker", "Side", "Qty", "Avg", "Mark", "Unrealized"]
     : ["Ticker", "Side", "Qty", "Avg", "Mark", "Unrealized"];
+  if (unwind) labels.splice(showSleeve ? 2 : 1, 0, "Unwind");
   const numeric = new Set(["Qty", "Avg", "Mark", "Unrealized"]);
   for (const label of labels) {
     const th = el("th", numeric.has(label) ? "num" : "", label);
@@ -610,9 +663,13 @@ function renderPositionTable(title, rows, { showSleeve, sleeve }) {
       dollars == null ? "\u2014" : `${formatUsd(dollars, { signed: true })} (${formatPct(frac, { signed: true, digits: 2 })})`
     );
     const cells = [];
-    if (showSleeve) cells.push(el("td", null, labelFor(shaped.sleeve)));
+    if (showSleeve) {
+      const sleeveLabel = shaped.sleeve === "equities" ? "Equities \u00b7 unwind" : labelFor(shaped.sleeve);
+      cells.push(el("td", null, sleeveLabel));
+    }
+    cells.push(el("td", "ticker", String(row.ticker)));
+    if (unwind) cells.push(el("td", null, unwindLabel(row.ticker)));
     cells.push(
-      el("td", "ticker", String(row.ticker)),
       sideCell,
       el("td", "num", formatQty(row.qty)),
       el("td", "num", formatPrice(row.avg)),
@@ -638,9 +695,18 @@ function renderPositions(payload) {
   }
   const rows = sortPositions(positionRows(payload));
   positionsEl.append(
+    el(
+      "p",
+      "note",
+      "Equities modeling and place are paused. Crypto owns the Agentic book. Open equity names are an unwind, queued to flat. PBR, BA, and AIG are still queued for regular hours. The export has no per-fill unwind flag, so this label is the desk state."
+    ),
     renderPositionTable("Combined", positionsFor(rows, "combined"), { showSleeve: true, sleeve: "combined" }),
     renderPositionTable("Crypto", positionsFor(rows, "crypto"), { showSleeve: false, sleeve: "crypto" }),
-    renderPositionTable("Equities", positionsFor(rows, "equities"), { showSleeve: false, sleeve: "equities" })
+    renderPositionTable("Equities", positionsFor(rows, "equities"), {
+      showSleeve: false,
+      sleeve: "equities",
+      unwind: true,
+    })
   );
 }
 
@@ -833,7 +899,219 @@ function summarizeOosRow(row) {
   return bits.join(" \u00b7 ") || "Pending T04.";
 }
 
-function renderModels(payload, oosPayload, meta) {
+function fixedDigits(value, digits) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "\u2014";
+  return n.toFixed(digits);
+}
+
+function feeView(scorecard, trades) {
+  const fromTape = feeDragFromTrades(trades, "crypto");
+  const published = scorecard?.fee_drag;
+  const drag = published?.status === "known" ? published : fromTape;
+  if (!drag || drag.status !== "known" || (drag.fee_usd == null && drag.sell_fee_usd == null)) {
+    return {
+      value: "UNKNOWN",
+      toneClass: "flat",
+      note: published?.note || "No fee column on the scrubbed tape. Not estimated.",
+    };
+  }
+  const total = drag.fee_usd != null ? drag.fee_usd : drag.sell_fee_usd;
+  let note = drag.note || "Crypto fee dollars from the rows that were read.";
+  if (drag.sell_fee_usd != null && drag.fee_usd != null && drag.sell_fee_usd !== drag.fee_usd) {
+    note = `${note} Closed-sell fees ${formatUsd(drag.sell_fee_usd)}.`;
+  }
+  return {
+    value: formatUsd(total),
+    toneClass: total > 0 ? "down" : "flat",
+    note,
+  };
+}
+
+function backendView(scorecard, models, oosPayload) {
+  const published = scorecard?.live_backend;
+  if (published && (published.id || published.note)) return published;
+  const inferred = inferLiveBackend(models);
+  const promoted = cryptoOosModels(oosPayload).find((row) => row.promoted === true);
+  if (inferred.id === "rules" && promoted?.model) {
+    return {
+      ...inferred,
+      promoted_model: promoted.model,
+      promoted_in_use: false,
+      note: `The CLI is still --backend rules. ${promoted.model} is promoted on after-cost mean and is not the live backend.`,
+    };
+  }
+  return inferred;
+}
+
+function summaryRows(summary) {
+  if (Array.isArray(summary)) return summary;
+  if (summary && Array.isArray(summary.rows)) return summary.rows;
+  return [];
+}
+
+function renderCryptoScorecard(models, oosPayload, summary, trades, scorecard) {
+  const card = el("article", "sleeve crypto model-card model-scorecard");
+  card.id = "crypto-scorecard";
+  const head = el("header", "sleeve-head");
+  head.append(el("h2", null, "Crypto scorecard"));
+  head.append(el("p", "fine", "Closed fills, rails, and the published out-of-sample read"));
+  card.append(head);
+
+  const grid = el("div", "metrics");
+  const backend = backendView(scorecard, models, oosPayload);
+  const backendMetric = metric("Live backend", backend.id || "UNKNOWN", "flat");
+  backendMetric.append(el("p", "fine", backend.note || "Live backend is not stated in this snapshot."));
+  grid.append(backendMetric);
+
+  const fills = closedFillStats(trades, "crypto");
+  const win = metric("Win %", formatWinPct(fills.rate), winTone(fills));
+  win.append(el("p", "fine", `${formatWinRecord(fills)} closed sells`));
+  grid.append(win);
+
+  const expectancy = metric("Expectancy");
+  const expectancyValue = expectancy.querySelector(".v");
+  expectancyValue.classList.add(tone(fills.expectancyFrac));
+  expectancyValue.replaceChildren(
+    pair(
+      fills.expectancyFrac == null ? "\u2014" : formatPct(fills.expectancyFrac, { signed: true, digits: 2 }),
+      fills.expectancyUsd == null ? "" : formatUsd(fills.expectancyUsd, { signed: true })
+    )
+  );
+  expectancy.append(el("p", "fine", `Mean P&L of decided crypto sells. Seed $${fills.seed}.`));
+  grid.append(expectancy);
+
+  const fee = feeView(scorecard, trades);
+  const feeMetric = metric("Fee drag", fee.value, fee.toneClass);
+  feeMetric.append(el("p", "fine", fee.note));
+  grid.append(feeMetric);
+
+  const cryptoRow = summaryRows(summary).find((row) => sleeveKey(row) === "crypto") || null;
+  const derived = cryptoRow ? deriveSleeve(cryptoRow) : null;
+  const headroom = metric("Kill headroom");
+  const headroomValue = headroom.querySelector(".v");
+  if (!derived || derived.killHeadroomFrac == null) {
+    headroomValue.textContent = "\u2014";
+  } else {
+    headroomValue.replaceChildren(
+      pair(`${formatPct(derived.killHeadroomFrac)} of book`, formatUsd(derived.killHeadroom))
+    );
+    const fill = headroomFill(derived);
+    if (fill != null) {
+      const meter = el("div", "meter");
+      meter.setAttribute("role", "img");
+      meter.setAttribute(
+        "aria-label",
+        `Kill headroom ${formatPct(derived.killHeadroomFrac)} of book against a ${formatPct(derived.dayKillFrac)} rail`
+      );
+      const bar = el("span");
+      bar.style.width = `${fill}%`;
+      if (fill < 25) bar.className = "thin";
+      meter.append(bar);
+      headroom.append(meter);
+    }
+  }
+  const rails = [];
+  if (derived?.dayKillFrac != null) {
+    rails.push(`Day kill ${formatPct(derived.dayKillFrac)} (${formatUsd(derived.dayKill)})`);
+  }
+  if (derived?.dayTargetFrac != null) {
+    rails.push(
+      `Day target ${formatPct(derived.dayTargetFrac, { signed: true })} (${formatUsd(derived.dayTarget, { signed: true })}), realized only`
+    );
+  }
+  headroom.append(el("p", "fine", rails.join(". ") || "Day rails are not in this snapshot."));
+  grid.append(headroom);
+  card.append(grid);
+
+  const unique = scorecard?.order_id_unique;
+  let fillNote = fills.orderIdAvailable
+    ? `Duplicate order ids dropped: ${fills.deduped}. Flat exits excluded. T24b will improve joined-fill metrics.`
+    : "Same rules as sleeve Win %: sell, finite P&L, flat zero excluded. The scrubbed tape has no order id, so rows are not collapsed. T24b will improve joined-fill metrics.";
+  if (
+    unique &&
+    Number.isFinite(unique.wins) &&
+    Number.isFinite(unique.losses) &&
+    (unique.wins !== fills.wins || unique.losses !== fills.losses)
+  ) {
+    fillNote = `Warehouse order-id unique closed sells are ${unique.wins}\u2013${unique.losses}. The headline matches sleeve Win % on the scrubbed tape. T24b will improve joined-fill metrics.`;
+  }
+  card.append(el("p", "note", fillNote));
+
+  const oosModels = cryptoOosModels(oosPayload);
+  const oosNote = oosPayload?.note || scorecard?.oos?.note;
+  const feeBps = scorecard?.oos?.fee_bps ?? 30;
+  if (!oosModels.length) {
+    card.append(el("p", "note", "No crypto out-of-sample rows in this snapshot."));
+  } else {
+    const wrap = el("div", "score-scroll");
+    const table = el("table", "score-oos");
+    const thead = document.createElement("thead");
+    const headerRow = document.createElement("tr");
+    for (const label of ["Model", "AUC", "After cost", "IR vs BTC", "n long", "Promoted"]) {
+      headerRow.append(el("th", null, label));
+    }
+    thead.append(headerRow);
+    const tbody = document.createElement("tbody");
+    for (const row of oosModels) {
+      const line = document.createElement("tr");
+      const promoted = row.promoted === true ? "yes" : row.promoted === false ? "no" : "\u2014";
+      for (const text of [
+        String(row.model || "model"),
+        fixedDigits(row.auc, 4),
+        fixedDigits(row.after_cost_mean, 4),
+        fixedDigits(row.sleeve_ir_vs_spy, 4),
+        row.n_long == null ? "\u2014" : String(row.n_long),
+        promoted,
+      ]) {
+        line.append(el("td", null, text));
+      }
+      tbody.append(line);
+    }
+    table.append(thead, tbody);
+    wrap.append(table);
+    card.append(wrap);
+  }
+  const benchmark = oosPayload?.benchmark_note || scorecard?.oos?.benchmark_note;
+  if (benchmark) card.append(el("p", "fine", String(benchmark)));
+  card.append(
+    el(
+      "p",
+      "note",
+      oosNote && String(oosNote).includes("30 bp")
+        ? String(oosNote)
+        : `Out-of-sample after-cost uses ${feeBps} bp. Live fees are higher. T24d will fee-correct this comparison.`
+    )
+  );
+
+  const train = scorecard?.last_train || {};
+  const trainBits = [];
+  const modelsAsOf = train.models_as_of || models?.as_of;
+  const oosAsOf = train.oos_updated_at || oosPayload?.updated_at;
+  if (modelsAsOf) trainBits.push(`Models as of ${formatEt(modelsAsOf)}`);
+  if (oosAsOf) trainBits.push(`OOS updated ${formatEt(oosAsOf)}`);
+  if (train.trained_at) trainBits.push(`Trained ${formatEt(train.trained_at)}`);
+  if (train.promoted_at) trainBits.push(`Promoted ${formatEt(train.promoted_at)}`);
+  trainBits.push(train.note || "No separate train or promote timestamp is in the exported model files.");
+  card.append(el("p", "fine", trainBits.join(". ").replace(/\.\./g, ".")));
+  card.append(renderSignalLinkage(scorecard));
+  return card;
+}
+
+function renderSignalLinkage(scorecard) {
+  const link = scorecard?.signal_linkage;
+  const known = link?.status === "known";
+  const artifacts = known && link.artifact_count != null ? String(link.artifact_count) : "UNKNOWN";
+  const outcomes = known && link.outcome_count != null ? String(link.outcome_count) : "UNKNOWN";
+  const generated = link?.last_generated_at ? formatEt(link.last_generated_at) : "UNKNOWN";
+  return el(
+    "p",
+    "note",
+    `Live scores land in signal_artifacts (${artifacts}). Fills join on signal_trade_outcomes (${outcomes}). Last generated ${generated}.`
+  );
+}
+
+function renderModels(payload, oosPayload, meta, summary, trades, scorecard) {
   modelsEl.replaceChildren();
   const models = payload && Array.isArray(payload.models) ? payload.models.slice() : [];
   const exported = oosRows(oosPayload);
@@ -843,6 +1121,7 @@ function renderModels(payload, oosPayload, meta) {
   if (oosPayload?.updated_at) freshBits.push(`OOS updated ${formatEt(oosPayload.updated_at)}`);
   if (freshBits.length) modelsEl.append(el("p", "freshness", freshBits.join(" · ")));
   if (payload && payload.note) modelsEl.append(el("p", "note", String(payload.note)));
+  modelsEl.append(renderCryptoScorecard(payload, oosPayload, summary, trades, scorecard));
   if (!models.length && exported.length) {
     for (const row of exported) {
       models.push({
@@ -874,7 +1153,17 @@ function renderModels(payload, oosPayload, meta) {
     const head = el("header", "sleeve-head");
     head.append(el("h2", null, model.name || "Model"));
     if (model.sleeve) head.append(el("p", "fine", String(model.sleeve)));
+    if (sleeveName === "equities") head.append(el("p", "chip paused", "Paused"));
     card.append(head);
+    if (sleeveName === "equities") {
+      card.append(
+        el(
+          "p",
+          "note",
+          "Paused. Equity modeling and place are not live. Crypto owns the Agentic book. This card is the last published research read."
+        )
+      );
+    }
     const list = el("dl");
     const fields = [
       ["Used", model.used],
@@ -956,19 +1245,20 @@ async function main() {
   }
   const token = meta.fetched_at || meta.export_attempted_at || Date.now();
   try {
-    const [summary, trades, models, oos, positions, curves] = await Promise.all([
+    const [summary, trades, models, oos, positions, curves, scorecard] = await Promise.all([
       loadJson("data/kpi_summary.json", token),
       loadJson("data/kpi_trades_scrubbed.json", token),
       loadJson("data/models.json", token).catch(() => ({ models: [], note: "data/models.json is not in this snapshot." })),
       loadJson("data/models_oos.json", token).catch(() => ({ rows: [] })),
       loadJson("data/open_positions.json", token).catch(() => ({ missing: true, positions: [] })),
       loadJson("data/sleeve_curves.json", token).catch(() => ({ missing: true, series: [] })),
+      loadJson("data/model_scorecard.json", token).catch(() => null),
     ]);
     render(summary, trades, meta);
     renderPositions(positions);
     curvePayload = curves;
     paintCurves();
-    renderModels(models, oos, meta);
+    renderModels(models, oos, meta, summary, trades, scorecard);
     openFromHash();
   } catch (error) {
     renderStatus(meta);

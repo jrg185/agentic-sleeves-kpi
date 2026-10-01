@@ -169,5 +169,107 @@ class TapeLedgerTests(unittest.TestCase):
         self.assertEqual(len(kept[0]["why"]), 240)
 
 
+class ScorecardTests(unittest.TestCase):
+    def test_committed_crypto_scorecard_matches_exported_json(self):
+        root = Path(__file__).resolve().parents[1]
+        summary = json.loads((root / "data" / "kpi_summary.json").read_text(encoding="utf-8"))
+        trades = json.loads((root / "data" / "kpi_trades_scrubbed.json").read_text(encoding="utf-8"))
+        models = json.loads((root / "data" / "models.json").read_text(encoding="utf-8"))
+        oos = json.loads((root / "data" / "models_oos.json").read_text(encoding="utf-8"))
+        built = export_kpi.build_model_scorecard(summary, trades, models, oos)
+        committed = json.loads((root / "data" / "model_scorecard.json").read_text(encoding="utf-8"))
+        self.assertEqual(committed, built)
+        self.assertEqual(built["live_backend"]["id"], "rules")
+        self.assertEqual(built["live_backend"]["cli"], "--backend rules")
+        self.assertEqual(built["live_backend"]["promoted_model"], "lgbm")
+        self.assertIs(built["live_backend"]["promoted_in_use"], False)
+        self.assertEqual(built["closed_fills"]["wins"], 23)
+        self.assertEqual(built["closed_fills"]["losses"], 18)
+        self.assertEqual(built["closed_fills"]["expectancy_usd"], 0.71)
+        self.assertEqual(built["closed_fills"]["dedupe"], "scrubbed-rows")
+        self.assertEqual(built["fee_drag"]["status"], "unknown")
+        self.assertIsNone(built["fee_drag"]["fee_usd"])
+        self.assertEqual(built["signal_linkage"]["status"], "unknown")
+        self.assertIsNone(built["signal_linkage"]["artifact_count"])
+        self.assertIsNone(built["signal_linkage"]["outcome_count"])
+        self.assertIsNone(built["signal_linkage"]["last_generated_at"])
+        self.assertEqual(built["oos"]["fee_bps"], 30)
+        self.assertEqual([row["model"] for row in built["oos"]["models"]], ["rules", "logistic", "lgbm"])
+        self.assertEqual(built["oos"]["models"][2]["promoted"], True)
+        crypto = next(row for row in summary if row["sleeve"] == "crypto")
+        self.assertEqual(built["kill"]["kill_headroom_stored"], crypto["kill_headroom_frac"])
+        self.assertEqual(built["kill"]["kill_headroom_frac"], crypto["kill_headroom_frac"] / 100)
+        self.assertEqual(built["kill"]["kill_headroom_usd"], 3.97)
+        self.assertEqual(built["kill"]["day_kill_pct"], crypto["day_kill_pct"])
+        self.assertEqual(built["kill"]["day_target_pct"], crypto["day_target_pct"])
+        blob = json.dumps(built)
+        self.assertNotIn('"order_id"', blob)
+        self.assertNotIn("should-not-survive", blob)
+        for row in built["oos"]["models"]:
+            self.assertNotIn("sleeve_ir_vs_spy", row)
+            self.assertIn("ir_vs_btc", row)
+
+    def test_write_bundle_emits_scorecard_without_order_ids(self):
+        with TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            export_kpi.write_json(
+                target / "models.json",
+                {
+                    "as_of": "2026-09-28T00:16:00Z",
+                    "note": "The CLI stays --backend rules.",
+                    "models": [{"sleeve": "crypto", "used": "stays --backend rules"}],
+                },
+            )
+            export_kpi.write_json(
+                target / "models_oos.json",
+                {
+                    "updated_at": "2026-09-28T00:16:00Z",
+                    "rows": [
+                        {
+                            "sleeve": "crypto",
+                            "model": "lgbm",
+                            "promoted": True,
+                            "auc": 0.53,
+                            "after_cost_mean": 0.0028,
+                            "sleeve_ir_vs_spy": 0.1113,
+                            "n_long": 3,
+                        }
+                    ],
+                },
+            )
+            export_kpi.write_bundle(
+                target,
+                {
+                    "kpi_summary": [
+                        {
+                            "sleeve": "crypto",
+                            "as_of": "2026-10-01T00:00:00Z",
+                            "kill_headroom_frac": 1.1,
+                            "day_kill_pct": -0.1,
+                            "day_target_pct": 0.025,
+                        }
+                    ],
+                    "kpi_trades_scrubbed": [
+                        {
+                            "sleeve": "crypto",
+                            "side": "sell",
+                            "pnl_frac_of_book": 0.01,
+                            "order_id": "should-not-survive",
+                        }
+                    ],
+                    "meta": {"fetched_at": "2026-10-01T00:00:00Z"},
+                    "models_oos": None,
+                },
+            )
+            card = json.loads((target / "model_scorecard.json").read_text(encoding="utf-8"))
+        self.assertEqual(card["live_backend"]["id"], "rules")
+        self.assertEqual(card["closed_fills"]["wins"], 1)
+        self.assertEqual(card["closed_fills"]["deduped"], 0)
+        self.assertEqual(card["fee_drag"]["status"], "unknown")
+        blob = json.dumps(card)
+        self.assertNotIn("should-not-survive", blob)
+        self.assertNotIn('"order_id"', blob)
+
+
 if __name__ == "__main__":
     unittest.main()

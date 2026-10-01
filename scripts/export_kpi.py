@@ -31,6 +31,12 @@ Derived, scrubbed before they are written (no raw dollar columns, no account ids
 
 Optional, written when the view exists and skipped when it does not:
   public.models_oos
+
+Derived for the Models tab, from the exported tape plus committed model files:
+  data/model_scorecard.json
+    Crypto live backend, closed-fill win rate, fee drag, kill headroom, and
+    the 30 bp OOS table. Fee dollars stay UNKNOWN when the warehouse has no
+    fee column. Order ids are not written.
 """
 
 from __future__ import annotations
@@ -885,6 +891,10 @@ def export_live(base_url: str, key: str | None, db_url: str | None) -> dict:
     rows["meta"]["row_counts"]["sleeve_curves"] = len(rows["sleeve_curves"]["series"])
     if missing:
         rows["meta"]["optional_missing"] = missing
+    facts = crypto_scorecard_facts(base_url, key, db_url)
+    rows["crypto_fee_drag"] = facts["fee_drag"]
+    rows["order_id_unique"] = facts["order_id_unique"]
+    rows["signal_linkage"] = load_signal_linkage(base_url, key, db_url)
     return rows
 
 
@@ -1070,6 +1080,599 @@ def stamp_export_failure(
     write_json(meta_path, meta)
 
 
+OOS_FEE_BPS = 30
+OOS_MODEL_ORDER = ("rules", "logistic", "lgbm")
+FEE_FIELD_KEYS = ("fee_usd", "fee", "fee_charged")
+CRYPTO_FACT_QUERIES = (
+    "sleeve=eq.crypto&select=side,order_id,pnl_trade_usd,pnl_frac_of_book,fee_usd&limit=2000",
+    "sleeve=eq.crypto&select=side,order_id,pnl_trade_usd,fee_usd&limit=2000",
+    "sleeve=eq.crypto&select=side,order_id,pnl_frac_of_book,fee_usd&limit=2000",
+    "sleeve=eq.crypto&select=side,order_id,pnl_trade_usd,fee&limit=2000",
+    "sleeve=eq.crypto&select=side,fee_usd&limit=2000",
+    "sleeve=eq.crypto&select=side,fee&limit=2000",
+)
+CRYPTO_FACT_SQL = (
+    "select side, order_id, pnl_trade_usd, pnl_frac_of_book, fee_usd from public.kpi_trades where sleeve = 'crypto'",
+    "select side, order_id, pnl_trade_usd, fee_usd from public.kpi_trades where sleeve = 'crypto'",
+    "select side, order_id, pnl_trade_usd, fee from public.kpi_trades where sleeve = 'crypto'",
+    "select side, fee_usd from public.kpi_trades where sleeve = 'crypto'",
+    "select side, fee from public.kpi_trades where sleeve = 'crypto'",
+)
+
+
+def _read_json(path: Path, default):
+    if not path.exists():
+        return default
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return default
+
+
+def _finite_number(value):
+    if value is None or value == "":
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number or number in (float("inf"), float("-inf")):
+        return None
+    return number
+
+
+def _sleeve_name(row: dict) -> str:
+    return str(row.get("sleeve") or row.get("book") or row.get("desk") or "").strip().lower()
+
+
+def _exit_pnl_frac(row: dict):
+    if "pnl_frac_of_book" in row and row.get("pnl_frac_of_book") not in (None, ""):
+        parsed = _finite_number(row.get("pnl_frac_of_book"))
+        if parsed is not None:
+            return parsed
+    return _finite_number(row.get("pnl_frac"))
+
+
+def _cents(frac, seed: Decimal = Decimal("300")):
+    if frac is None:
+        return None
+    return float((Decimal(str(frac)) * seed).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def closed_fill_stats(rows: list, sleeve: str = "crypto", seed: Decimal = Decimal("300")) -> dict:
+    """Sell fills with a finite pnl fraction. Flat zero is excluded.
+
+    A repeated order id is counted once when that field is present. The
+    scrubbed Pages tape drops order ids, so those rows stay one-per-line.
+    """
+    wanted = {"crypto", "equities"} if sleeve == "combined" else {sleeve}
+    seen: set[str] = set()
+    wins = losses = flats = deduped = 0
+    order_id_available = False
+    total = Decimal("0")
+    for row in rows or []:
+        if not isinstance(row, dict) or _sleeve_name(row) not in wanted:
+            continue
+        if str(row.get("side") or "").strip().lower() != "sell":
+            continue
+        frac = _exit_pnl_frac(row)
+        if frac is None:
+            continue
+        order_id = str(row.get("order_id") or "").strip()
+        if order_id:
+            order_id_available = True
+            if order_id in seen:
+                deduped += 1
+                continue
+            seen.add(order_id)
+        if frac == 0:
+            flats += 1
+            continue
+        if frac > 0:
+            wins += 1
+        else:
+            losses += 1
+        total += Decimal(str(frac))
+    decided = wins + losses
+    expectancy = None if decided == 0 else total / Decimal(decided)
+    return {
+        "wins": wins,
+        "losses": losses,
+        "flats": flats,
+        "decided": decided,
+        "win_rate": None if decided == 0 else float(q6(Decimal(wins) / Decimal(decided))),
+        "expectancy_frac": None if expectancy is None else float(q6(expectancy)),
+        "expectancy_usd": None if expectancy is None else _cents(expectancy, seed),
+        "seed_usd": int(seed),
+        "deduped": deduped,
+        "order_id_available": order_id_available,
+    }
+
+
+def unknown_fee(note: str) -> dict:
+    return {
+        "status": "unknown",
+        "fee_usd": None,
+        "sell_fee_usd": None,
+        "fee_frac": None,
+        "n": None,
+        "seed_usd": 300,
+        "note": note,
+    }
+
+
+def fee_drag_from_rows(rows: list, sleeve: str = "crypto", seed: Decimal = Decimal("300")) -> dict | None:
+    present = None
+    for row in rows or []:
+        if not isinstance(row, dict) or _sleeve_name(row) not in {sleeve, ""}:
+            continue
+        for key in FEE_FIELD_KEYS:
+            if key in row:
+                present = key
+                break
+        if present:
+            break
+    if not present:
+        return None
+    seen: set[str] = set()
+    total = Decimal("0")
+    sell_total = Decimal("0")
+    n = 0
+    numeric = False
+    for row in rows or []:
+        if not isinstance(row, dict) or _sleeve_name(row) not in {sleeve, ""}:
+            continue
+        order_id = str(row.get("order_id") or "").strip()
+        if order_id:
+            if order_id in seen:
+                continue
+            seen.add(order_id)
+        amount = _decimal_or_none(row.get(present))
+        if amount is None:
+            continue
+        numeric = True
+        total += amount
+        n += 1
+        if str(row.get("side") or "").strip().lower() == "sell":
+            sell_total += amount
+    if not numeric:
+        return None
+    def usd(value: Decimal) -> float:
+        return float(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+    return {
+        "status": "known",
+        "fee_usd": usd(total),
+        "sell_fee_usd": usd(sell_total),
+        "fee_frac": float(q6(total / seed)) if seed else None,
+        "n": n,
+        "seed_usd": int(seed),
+        "note": "Sum of crypto fee dollars on the rows that were read. Identifiers are not written.",
+    }
+
+
+def _oos_list(payload) -> list:
+    if isinstance(payload, list):
+        return [row for row in payload if isinstance(row, dict)]
+    if isinstance(payload, dict) and isinstance(payload.get("rows"), list):
+        return [row for row in payload["rows"] if isinstance(row, dict)]
+    return []
+
+
+def _crypto_oos_rows(payload) -> list:
+    rows = []
+    for row in _oos_list(payload):
+        sleeve = str(row.get("sleeve") or row.get("asset_class") or "").strip().lower()
+        if sleeve == "crypto":
+            rows.append(row)
+    rows.sort(key=lambda row: OOS_MODEL_ORDER.index(str(row.get("model") or "").lower()) if str(row.get("model") or "").lower() in OOS_MODEL_ORDER else 99)
+    return rows
+
+
+def live_backend_block(models: dict, oos) -> dict:
+    models = models if isinstance(models, dict) else {}
+    parts = [str(models.get("note") or "")]
+    for model in models.get("models") or []:
+        if not isinstance(model, dict):
+            continue
+        if str(model.get("sleeve") or "").strip().lower() != "crypto":
+            continue
+        parts.append(str(model.get("used") or ""))
+        parts.append(str(model.get("training") or ""))
+        nested = model.get("oos")
+        if isinstance(nested, dict):
+            parts.append(str(nested.get("note") or ""))
+    text = "\n".join(parts)
+    rules = "--backend rules" in text
+    promoted = None
+    for row in _crypto_oos_rows(oos):
+        if row.get("promoted") is True:
+            promoted = str(row.get("model") or "") or None
+            break
+    if rules and promoted:
+        note = (
+            f"The CLI is still --backend rules. {promoted} is promoted on after-cost mean "
+            "and is not the live backend."
+        )
+    elif rules:
+        note = "The CLI is still --backend rules."
+    else:
+        note = "Live backend is not stated in data/models.json. Not inferred."
+    return {
+        "id": "rules" if rules else None,
+        "cli": "--backend rules" if rules else None,
+        "promoted_model": promoted,
+        "promoted_in_use": False if rules else None,
+        "source": "data/models.json",
+        "note": note,
+    }
+
+
+def _first_stamp(payload, keys):
+    if not isinstance(payload, dict):
+        return None
+    for key in keys:
+        value = payload.get(key)
+        if value:
+            return value
+    return None
+
+
+def as_fraction(value):
+    """Match derive.js asFraction. Absolute values above 1 are percent points."""
+    number = _finite_number(value)
+    if number is None:
+        return None
+    return number / 100.0 if abs(number) > 1 else number
+
+
+def kill_block(summary) -> dict:
+    rows = summary if isinstance(summary, list) else []
+    crypto = next((row for row in rows if isinstance(row, dict) and _sleeve_name(row) == "crypto"), None)
+    if not crypto:
+        return {
+            "as_of": None,
+            "kill_headroom_stored": None,
+            "kill_headroom_frac": None,
+            "kill_headroom_usd": None,
+            "day_kill_pct": None,
+            "day_kill_usd": None,
+            "day_target_pct": None,
+            "day_target_usd": None,
+            "seed_usd": 300,
+            "note": "No crypto row in kpi_summary.",
+        }
+    stored = _finite_number(crypto.get("kill_headroom_frac"))
+    head = as_fraction(stored)
+    day_kill = as_fraction(crypto.get("day_kill_pct"))
+    day_target = as_fraction(crypto.get("day_target_pct"))
+    return {
+        "as_of": crypto.get("as_of"),
+        "kill_headroom_stored": stored,
+        "kill_headroom_frac": head,
+        "kill_headroom_usd": _cents(head),
+        "day_kill_pct": day_kill,
+        "day_kill_usd": _cents(day_kill),
+        "day_target_pct": day_target,
+        "day_target_usd": _cents(day_target),
+        "seed_usd": 300,
+        "note": "Same reading as the crypto sleeve card. A stored absolute value above 1 is percent points.",
+    }
+
+
+def oos_block(oos) -> dict:
+    payload = oos if isinstance(oos, dict) else {"rows": _oos_list(oos)}
+    models = []
+    for row in _crypto_oos_rows(payload):
+        models.append(
+            {
+                "model": row.get("model"),
+                "auc": row.get("auc"),
+                "brier": row.get("brier"),
+                "n_long": row.get("n_long"),
+                "after_cost_mean": row.get("after_cost_mean"),
+                "ir_vs_btc": row.get("sleeve_ir_vs_spy"),
+                "n_cohorts": row.get("n_cohorts"),
+                "promoted": row.get("promoted"),
+            }
+        )
+    return {
+        "fee_bps": OOS_FEE_BPS,
+        "updated_at": payload.get("updated_at") if isinstance(payload, dict) else None,
+        "benchmark_note": payload.get("benchmark_note") if isinstance(payload, dict) else None,
+        "note": "Out-of-sample after-cost uses 30 bp. Live fees are higher. T24d will fee-correct this comparison.",
+        "models": models,
+    }
+
+
+def unknown_linkage(note: str) -> dict:
+    return {
+        "status": "unknown",
+        "artifacts_table": "signal_artifacts",
+        "outcomes_table": "signal_trade_outcomes",
+        "artifact_count": None,
+        "outcome_count": None,
+        "last_generated_at": None,
+        "note": note,
+    }
+
+
+def _content_range_count(header: str | None):
+    if not header or "/" not in header:
+        return None
+    total = header.rsplit("/", 1)[-1].strip()
+    if total == "*" or not total.isdigit():
+        return None
+    return int(total)
+
+
+def _rest_latest_count(base_url: str, key: str, table: str, stamp: str):
+    """Return (count, latest stamp) or None. Does not return row payloads."""
+    query = urllib.parse.urlencode(
+        {"select": stamp, "order": f"{stamp}.desc", "limit": "1"}
+    )
+    request = urllib.request.Request(
+        base_url.rstrip("/") + f"/rest/v1/{table}?{query}",
+        headers={
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Accept": "application/json",
+            "Prefer": "count=exact",
+            "Range": "0-0",
+            "User-Agent": "agentic-sleeves-kpi-export",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            count = _content_range_count(response.headers.get("content-range"))
+    except Exception:
+        return None
+    if not isinstance(payload, list):
+        return None
+    latest = None
+    if payload and isinstance(payload[0], dict):
+        latest = payload[0].get(stamp)
+    return count, latest
+
+
+def load_signal_linkage(base_url: str, key: str | None, db_url: str | None) -> dict:
+    """Counts and the latest generated_at only. No artifact payload, no order ids."""
+    if not key and not db_url:
+        return unknown_linkage(
+            "No warehouse credential on this export. signal_artifacts counts were not read."
+        )
+    artifact = None
+    outcomes = None
+    if key:
+        for stamp in ("generated_at", "created_at"):
+            artifact = _rest_latest_count(base_url, key, "signal_artifacts", stamp)
+            if artifact is not None:
+                break
+        for stamp in ("generated_at", "created_at", "joined_at"):
+            outcomes = _rest_latest_count(base_url, key, "signal_trade_outcomes", stamp)
+            if outcomes is not None:
+                break
+    if artifact is None and outcomes is None and db_url:
+        artifact_row = _sql_optional(
+            db_url,
+            "select count(*)::int as n, max(generated_at) as latest from public.signal_artifacts",
+        )
+        outcome_row = _sql_optional(
+            db_url,
+            "select count(*)::int as n from public.signal_trade_outcomes",
+        )
+        if artifact_row:
+            artifact = (artifact_row[0].get("n"), artifact_row[0].get("latest"))
+        if outcome_row:
+            outcomes = (outcome_row[0].get("n"), None)
+    if artifact is None and outcomes is None:
+        return unknown_linkage(
+            "signal_artifacts and signal_trade_outcomes were not read. Counts are not estimated."
+        )
+    artifact_count, generated = artifact if artifact else (None, None)
+    outcome_count = outcomes[0] if outcomes else None
+    if generated is not None and not isinstance(generated, str):
+        generated = jsonable(generated)
+    return {
+        "status": "known",
+        "artifacts_table": "signal_artifacts",
+        "outcomes_table": "signal_trade_outcomes",
+        "artifact_count": artifact_count,
+        "outcome_count": outcome_count,
+        "last_generated_at": generated,
+        "note": "Counts only. The artifact payload stays in the warehouse.",
+    }
+
+
+def build_model_scorecard(
+    summary,
+    trades,
+    models,
+    oos,
+    fee_drag=None,
+    order_id_unique=None,
+    signal_linkage=None,
+) -> dict:
+    """Crypto scorecard from already-exported JSON. Does not invent fees."""
+    fills = closed_fill_stats(trades if isinstance(trades, list) else [], "crypto")
+    if fills["order_id_available"]:
+        fill_note = (
+            f"Duplicate order ids dropped: {fills['deduped']}. Flat zero is excluded. "
+            "T24b will improve joined-fill metrics."
+        )
+    else:
+        fill_note = (
+            "Sell fills with a finite P&L. Flat zero is excluded, same as sleeve Win %. "
+            "The scrubbed tape has no order id, so rows are not collapsed. "
+            "T24b will improve joined-fill metrics."
+        )
+    scanned = fee_drag_from_rows(trades if isinstance(trades, list) else [])
+    if isinstance(fee_drag, dict) and fee_drag.get("status") == "known":
+        fees = fee_drag
+    elif isinstance(scanned, dict) and scanned.get("status") == "known":
+        fees = scanned
+    elif isinstance(fee_drag, dict) and fee_drag.get("status") == "unknown":
+        fees = fee_drag
+    else:
+        fees = unknown_fee("No fee column on the scrubbed tape. Not estimated.")
+    model_payload = models if isinstance(models, dict) else {}
+    oos_payload = oos if isinstance(oos, (dict, list)) else {"rows": []}
+    trained = _first_stamp(model_payload, ("trained_at", "promoted_at", "fit_at"))
+    for model in model_payload.get("models") or []:
+        if isinstance(model, dict) and str(model.get("sleeve") or "").strip().lower() == "crypto":
+            trained = trained or _first_stamp(model, ("trained_at", "promoted_at", "fit_at"))
+    unique = order_id_unique if isinstance(order_id_unique, dict) else None
+    if unique:
+        unique = {key: value for key, value in unique.items() if key != "order_id"}
+    return {
+        "sleeve": "crypto",
+        "ticket": "T24e",
+        "live_backend": live_backend_block(model_payload, oos_payload),
+        "closed_fills": {
+            **fills,
+            "dedupe": "order-id" if fills["order_id_available"] else "scrubbed-rows",
+            "note": fill_note,
+        },
+        "order_id_unique": unique,
+        "fee_drag": fees,
+        "kill": kill_block(summary),
+        "oos": oos_block(oos_payload),
+        "last_train": {
+            "models_as_of": model_payload.get("as_of"),
+            "oos_updated_at": oos_payload.get("updated_at") if isinstance(oos_payload, dict) else None,
+            "trained_at": trained,
+            "promoted_at": _first_stamp(model_payload, ("promoted_at",)),
+            "note": (
+                "No separate train or promote timestamp is in the exported model files."
+                if not trained
+                else "Train timestamp is the field exported on data/models.json."
+            ),
+        },
+        "signal_linkage": signal_linkage
+        if isinstance(signal_linkage, dict)
+        else unknown_linkage(
+            "Scrubbed Pages JSON has no signal_artifacts or signal_trade_outcomes counts. Not estimated."
+        ),
+    }
+
+
+def _rest_optional(base_url: str, key: str, query: str):
+    url = base_url.rstrip("/") + "/rest/v1/kpi_trades?" + query
+    request = urllib.request.Request(
+        url,
+        headers={
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Accept": "application/json",
+            "User-Agent": "agentic-sleeves-kpi-export",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return None
+    if not isinstance(payload, list):
+        return None
+    return [row for row in payload if isinstance(row, dict)]
+
+
+def _sql_optional(db_url: str, sql: str):
+    try:
+        import psycopg
+    except ImportError:
+        return None
+    try:
+        with psycopg.connect(db_url, connect_timeout=20) as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql)
+                columns = [desc.name for desc in cur.description]
+                return [dict(zip(columns, row)) for row in cur.fetchall()]
+    except Exception:
+        return None
+
+
+def _normalize_fact_rows(rows: list) -> list:
+    normalized = []
+    seed = Decimal("300")
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        item = dict(row)
+        item["sleeve"] = item.get("sleeve") or "crypto"
+        if item.get("pnl_frac_of_book") in (None, "") and item.get("pnl_trade_usd") not in (None, ""):
+            pnl = _decimal_or_none(item.get("pnl_trade_usd"))
+            if pnl is not None:
+                item["pnl_frac_of_book"] = float(q6(pnl / seed))
+        normalized.append(item)
+    return normalized
+
+
+def crypto_scorecard_facts(base_url: str, key: str | None, db_url: str | None) -> dict:
+    """Best-effort warehouse fees and order-id-unique sells. Never raises.
+
+    The result has aggregates only. Order ids are dropped before return.
+    """
+    rows = None
+    if key:
+        for query in CRYPTO_FACT_QUERIES:
+            rows = _rest_optional(base_url, key, query)
+            if rows is not None:
+                break
+    if rows is None and db_url:
+        for sql in CRYPTO_FACT_SQL:
+            rows = _sql_optional(db_url, sql)
+            if rows is not None:
+                break
+    if rows is None:
+        return {
+            "fee_drag": unknown_fee(
+                "Warehouse fee columns were not read. The scrubbed tape has no fee field. Not estimated."
+            ),
+            "order_id_unique": None,
+        }
+    fees = fee_drag_from_rows(rows) or unknown_fee(
+        "Crypto trades were read and no fee amount was present. Not estimated."
+    )
+    normalized = _normalize_fact_rows(rows)
+    unique = None
+    if any(str(row.get("order_id") or "").strip() for row in normalized):
+        stats = closed_fill_stats(normalized, "crypto")
+        if stats["order_id_available"] and (
+            any(row.get("pnl_frac_of_book") not in (None, "") for row in normalized)
+            or any(row.get("pnl_trade_usd") not in (None, "") for row in normalized)
+        ):
+            unique = {
+                "wins": stats["wins"],
+                "losses": stats["losses"],
+                "flats": stats["flats"],
+                "deduped": stats["deduped"],
+                "win_rate": stats["win_rate"],
+                "expectancy_frac": stats["expectancy_frac"],
+                "expectancy_usd": stats["expectancy_usd"],
+                "note": "Unique order id among crypto sells. The headline Win % stays the scrubbed tape.",
+            }
+    return {"fee_drag": fees, "order_id_unique": unique}
+
+
+def write_model_scorecard(target: Path, bundle: dict) -> None:
+    models = _read_json(target / "models.json", {})
+    oos = bundle.get("models_oos")
+    if not oos_has_rows(oos):
+        oos = _read_json(target / "models_oos.json", {"rows": []})
+    payload = build_model_scorecard(
+        bundle.get("kpi_summary") or [],
+        bundle.get("kpi_trades_scrubbed") or [],
+        models if isinstance(models, dict) else {},
+        oos,
+        fee_drag=bundle.get("crypto_fee_drag"),
+        order_id_unique=bundle.get("order_id_unique"),
+        signal_linkage=bundle.get("signal_linkage"),
+    )
+    write_json(target / "model_scorecard.json", payload)
+
+
 def write_bundle(target: Path, bundle: dict) -> None:
     for name in (*VIEWS, "meta"):
         write_json(target / f"{name}.json", bundle[name])
@@ -1085,6 +1688,7 @@ def write_bundle(target: Path, bundle: dict) -> None:
         if isinstance(oos, list):
             oos = {"rows": oos, "updated_at": bundle["meta"]["fetched_at"]}
         write_json(target / "models_oos.json", oos)
+    write_model_scorecard(target, bundle)
 
 
 def self_test() -> int:
@@ -1370,6 +1974,65 @@ def self_test() -> int:
         raise RuntimeError("equities curve did not derive book from running P&L")
     if [row["sleeve"] for row in history] != ["equities", "combined", "crypto"]:
         raise RuntimeError(f"curve order {history}")
+
+    card = build_model_scorecard(
+        summary=[
+            {
+                "sleeve": "crypto",
+                "as_of": "2026-09-28T00:00:00Z",
+                "kill_headroom_frac": 1.25,
+                "day_kill_pct": -0.1,
+                "day_target_pct": 0.025,
+            }
+        ],
+        trades=[
+            {"sleeve": "crypto", "side": "sell", "pnl_frac_of_book": 0.01, "order_id": "a"},
+            {"sleeve": "crypto", "side": "sell", "pnl_frac_of_book": 0.01, "order_id": "a"},
+            {"sleeve": "crypto", "side": "sell", "pnl_frac_of_book": -0.02},
+            {"sleeve": "crypto", "side": "sell", "pnl_frac_of_book": 0},
+            {"sleeve": "crypto", "side": "buy", "pnl_frac_of_book": 0.5, "fee_usd": "1.00"},
+        ],
+        models={
+            "as_of": "2026-09-28T00:16:00Z",
+            "note": "The CLI stays --backend rules.",
+            "models": [{"sleeve": "crypto", "used": "python -m model.run stays --backend rules."}],
+        },
+        oos={
+            "updated_at": "2026-09-28T00:16:00Z",
+            "rows": [
+                {"sleeve": "crypto", "model": "lgbm", "auc": 0.53, "after_cost_mean": 0.003, "sleeve_ir_vs_spy": 0.1, "n_long": 6, "promoted": True},
+                {"sleeve": "crypto", "model": "rules", "auc": 0.5, "after_cost_mean": -0.001, "sleeve_ir_vs_spy": -1, "n_long": 10, "promoted": False},
+                {"asset_class": "equity", "model": "lgbm", "promoted": True, "after_cost_mean": 0.008},
+                {"sleeve": "crypto", "model": "logistic", "auc": 0.52, "after_cost_mean": 0.002, "sleeve_ir_vs_spy": 0.2, "n_long": 4, "promoted": False},
+            ],
+        },
+    )
+    if card["live_backend"]["id"] != "rules" or card["live_backend"]["promoted_in_use"] is not False:
+        raise RuntimeError(f"backend {card['live_backend']}")
+    if card["live_backend"]["promoted_model"] != "lgbm":
+        raise RuntimeError(f"promoted {card['live_backend']}")
+    if card["closed_fills"]["wins"] != 1 or card["closed_fills"]["losses"] != 1 or card["closed_fills"]["deduped"] != 1:
+        raise RuntimeError(f"fills {card['closed_fills']}")
+    if card["fee_drag"]["status"] != "known" or card["fee_drag"]["fee_usd"] != 1.0:
+        raise RuntimeError(f"fees {card['fee_drag']}")
+    if card["oos"]["fee_bps"] != 30 or [row["model"] for row in card["oos"]["models"]] != ["rules", "logistic", "lgbm"]:
+        raise RuntimeError(f"oos {card['oos']}")
+    if card["kill"]["kill_headroom_stored"] != 1.25 or card["kill"]["kill_headroom_frac"] != 0.0125:
+        raise RuntimeError(f"kill {card['kill']}")
+    if card["kill"]["kill_headroom_usd"] != 3.75 or card["kill"]["day_kill_usd"] != -30.0:
+        raise RuntimeError(f"kill dollars {card['kill']}")
+    if '"order_id"' in json.dumps(card):
+        raise RuntimeError("scorecard wrote an order id")
+    plain = build_model_scorecard(
+        summary=[],
+        trades=[{"sleeve": "crypto", "side": "sell", "pnl_frac_of_book": 0.02}],
+        models={"note": "no cli flag"},
+        oos={"rows": []},
+    )
+    if plain["fee_drag"]["status"] != "unknown" or plain["live_backend"]["id"] is not None:
+        raise RuntimeError(f"plain scorecard {plain['fee_drag']} {plain['live_backend']}")
+    if plain["closed_fills"]["wins"] != 1 or plain["closed_fills"]["expectancy_usd"] != 6.0:
+        raise RuntimeError(f"plain fills {plain['closed_fills']}")
 
     print("self-test ok")
     return 0

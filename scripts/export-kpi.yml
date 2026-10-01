@@ -64,7 +64,7 @@ jobs:
         run: |
           python3 scripts/export_kpi.py --self-test
           python3 -m unittest scripts/test_export_status.py
-          node --test scripts/test_tape_ux.mjs scripts/test_board_t17.mjs
+          node --test scripts/test_tape_ux.mjs scripts/test_board_t17.mjs scripts/test_model_scorecard.mjs
 
   export:
     needs: check
