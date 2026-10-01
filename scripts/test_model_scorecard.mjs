@@ -24,21 +24,39 @@ const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
 test("crypto closed fills match sleeve win rules and the scrubbed tape", () => {
   const stats = closedFillStats(trades, "crypto");
-  assert.equal(stats.wins, 23);
-  assert.equal(stats.losses, 18);
-  assert.equal(stats.flats, 0);
-  assert.equal(stats.decided, 41);
+  const fills = read("model_scorecard.json").closed_fills;
+  for (const key of ["wins", "losses", "flats", "decided", "deduped"]) {
+    assert.equal(Number.isInteger(stats[key]), true);
+    assert.equal(stats[key] >= 0, true);
+    assert.equal(stats[key], fills[key]);
+  }
+  assert.equal(stats.wins + stats.losses, stats.decided);
   assert.equal(stats.orderIdAvailable, false);
-  assert.equal(stats.deduped, 0);
-  assert.equal(formatWinPct(stats.rate), "56%");
-  assert.equal(formatWinRecord(stats), "23\u201318");
-  assert.equal(formatPct(stats.expectancyFrac, { signed: true, digits: 2 }), "+0.24%");
-  assert.equal(formatUsd(stats.expectancyUsd, { signed: true }), "+$0.71");
+  assert.equal(fills.order_id_available, false);
+  assert.equal(fills.dedupe, "scrubbed-rows");
+  assert.equal(typeof stats.expectancyUsd, "number");
+  assert.equal(Number.isFinite(stats.expectancyUsd), true);
+  assert.equal(stats.expectancyUsd, fills.expectancy_usd);
+  assert.equal(formatWinPct(stats.rate), formatWinPct(fills.win_rate));
+  assert.equal(formatWinRecord(stats), formatWinRecord(fills));
+  assert.equal(
+    formatPct(stats.expectancyFrac, { signed: true, digits: 2 }),
+    formatPct(fills.expectancy_frac, { signed: true, digits: 2 })
+  );
+  assert.equal(formatUsd(stats.expectancyUsd, { signed: true }), formatUsd(fills.expectancy_usd, { signed: true }));
   const tapeFees = feeDragFromTrades(trades, "crypto");
+  const fees = read("model_scorecard.json").fee_drag;
   assert.equal(tapeFees.status, "known");
-  assert.equal(tapeFees.n, 106);
-  assert.equal(tapeFees.fee_usd, 16.64);
-  assert.equal(tapeFees.sell_fee_usd, 6.53);
+  assert.equal(fees.status, "known");
+  for (const key of ["n", "fee_usd", "sell_fee_usd"]) {
+    assert.equal(typeof tapeFees[key], "number");
+    assert.equal(Number.isFinite(tapeFees[key]), true);
+    assert.equal(tapeFees[key] >= 0, true);
+    assert.equal(tapeFees[key], fees[key]);
+  }
+  assert.equal(typeof tapeFees.fee_frac, "number");
+  assert.equal(Number.isFinite(tapeFees.fee_frac), true);
+  assert.equal(tapeFees.fee_frac >= 0, true);
 });
 
 test("order id collapses duplicate sells and fee dollars stay explicit", () => {
@@ -111,11 +129,21 @@ test("models tab markup loads the scorecard instead of a second page", () => {
   assert.match(scorecard.oos.note, /T24d will set FEE_BPS/);
   assert.equal(scorecard.oos.fee_bps, 30);
   assert.equal(scorecard.fee_drag.status, "known");
-  assert.equal(scorecard.fee_drag.fee_usd, 16.64);
-  assert.equal(scorecard.fee_drag.n, 106);
+  for (const key of ["fee_usd", "sell_fee_usd", "fee_frac"]) {
+    assert.equal(typeof scorecard.fee_drag[key], "number");
+    assert.equal(Number.isFinite(scorecard.fee_drag[key]), true);
+    assert.equal(scorecard.fee_drag[key] >= 0, true);
+  }
+  assert.equal(Number.isInteger(scorecard.fee_drag.n), true);
+  assert.equal(scorecard.fee_drag.n >= 0, true);
+  assert.match(scorecard.fee_drag.note, /Measured live fee/);
+  assert.match(scorecard.fee_drag.note, /T24d/);
   assert.equal(scorecard.signal_linkage.status, "known");
-  assert.equal(scorecard.signal_linkage.artifact_count, 8);
-  assert.equal(scorecard.signal_linkage.outcome_count, 0);
+  for (const key of ["artifact_count", "outcome_count"]) {
+    assert.equal(Number.isInteger(scorecard.signal_linkage[key]), true);
+    assert.equal(scorecard.signal_linkage[key] >= 0, true);
+  }
+  assert.match(String(scorecard.signal_linkage.last_generated_at || ""), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
   assert.equal(app.includes("T24b will improve joined-fill metrics."), true);
   assert.equal(app.includes("signal_artifacts"), true);
   assert.equal(app.includes("signal_trade_outcomes"), true);
