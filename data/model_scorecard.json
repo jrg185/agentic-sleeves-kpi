@@ -25,19 +25,19 @@
   },
   "order_id_unique": null,
   "fee_drag": {
-    "status": "unknown",
-    "fee_usd": null,
-    "sell_fee_usd": null,
-    "fee_frac": null,
-    "n": null,
+    "status": "known",
+    "fee_usd": 16.64,
+    "sell_fee_usd": 6.53,
+    "fee_frac": 0.055467,
+    "n": 106,
     "seed_usd": 300,
-    "note": "No fee column on the scrubbed tape. Not estimated."
+    "note": "Sum of crypto fee dollars on the rows that were read. Identifiers are not written. Measured live fee ~95 bps/leg (median) / ~190 RT from tape. T24d will set FEE_BPS from that. This read median 95 bps/leg (~190 RT)."
   },
   "kill": {
-    "as_of": "2026-10-01T00:44:28+00:00",
-    "kill_headroom_stored": 1.293335,
-    "kill_headroom_frac": 0.01293335,
-    "kill_headroom_usd": 3.88,
+    "as_of": "2026-10-01T01:13:51+00:00",
+    "kill_headroom_stored": 1.34609,
+    "kill_headroom_frac": 0.0134609,
+    "kill_headroom_usd": 4.04,
     "day_kill_pct": -0.1,
     "day_kill_usd": -30.0,
     "day_target_pct": 0.025,
@@ -91,12 +91,12 @@
     "note": "No separate train or promote timestamp is in the exported model files."
   },
   "signal_linkage": {
-    "status": "unknown",
+    "status": "known",
     "artifacts_table": "signal_artifacts",
     "outcomes_table": "signal_trade_outcomes",
-    "artifact_count": null,
-    "outcome_count": null,
-    "last_generated_at": null,
-    "note": "Scrubbed Pages JSON has no signal_artifacts or signal_trade_outcomes counts. Not estimated."
+    "artifact_count": 8,
+    "outcome_count": 0,
+    "last_generated_at": "2026-10-01T00:58:40+00:00",
+    "note": "Counts only. The artifact payload stays in the warehouse."
   }
 }
