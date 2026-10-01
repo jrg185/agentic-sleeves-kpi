@@ -1501,5 +1501,38 @@
     "why": "FLATTEN Joe/Wags 2026-09-30 \u2014 close all equities; Crypto owns book",
     "running_pnl_frac": -0.026782,
     "running_balance_frac": 0.973218
+  },
+  {
+    "sleeve": "equities",
+    "timestamp_et": "2026-10-01T13:30:00.969+00:00",
+    "ticker": "AIG",
+    "side": "sell",
+    "notional_frac_of_book": 0.14908,
+    "pnl_frac_of_book": -0.00268,
+    "why": "FLATTEN Joe/Wags 2026-09-30 \u2014 RTH open market sell; close residual equities",
+    "running_pnl_frac": -0.029462,
+    "running_balance_frac": 0.970538
+  },
+  {
+    "sleeve": "equities",
+    "timestamp_et": "2026-10-01T13:30:01.276+00:00",
+    "ticker": "BA",
+    "side": "sell",
+    "notional_frac_of_book": 0.18858,
+    "pnl_frac_of_book": -0.001419,
+    "why": "FLATTEN Joe/Wags 2026-09-30 \u2014 RTH open market sell; close residual equities",
+    "running_pnl_frac": -0.030881,
+    "running_balance_frac": 0.969119
+  },
+  {
+    "sleeve": "equities",
+    "timestamp_et": "2026-10-01T13:30:01.802+00:00",
+    "ticker": "PBR",
+    "side": "sell",
+    "notional_frac_of_book": 0.19866,
+    "pnl_frac_of_book": -0.001341,
+    "why": "FLATTEN Joe/Wags 2026-09-30 \u2014 RTH open market sell; close residual equities",
+    "running_pnl_frac": -0.032222,
+    "running_balance_frac": 0.967778
   }
 ]
