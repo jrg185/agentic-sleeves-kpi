@@ -379,6 +379,7 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
 .tape-month {
   display: inline-flex;
   align-items: center;
+  flex: none;
   gap: 8px;
   margin: 0;
   color: var(--muted);
@@ -387,19 +388,25 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
 .tape-month select {
   appearance: none;
   border: 1px solid var(--line);
-  background: transparent;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5 L6 8.5 L10 4.5' fill='none' stroke='%23b3a794' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 12px;
   color: var(--ink);
   font: inherit;
   border-radius: 999px;
   min-height: 44px;
-  padding: 8px 14px;
+  padding: 8px 32px 8px 14px;
   cursor: pointer;
 }
 .tape-count {
+  flex: none;
   margin: 0;
   color: var(--muted);
   font-size: 0.88rem;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .tape-head .tape-export { margin-left: 0; }
 .tape-toggle {
