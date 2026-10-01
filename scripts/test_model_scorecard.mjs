@@ -34,7 +34,11 @@ test("crypto closed fills match sleeve win rules and the scrubbed tape", () => {
   assert.equal(formatWinRecord(stats), "23\u201318");
   assert.equal(formatPct(stats.expectancyFrac, { signed: true, digits: 2 }), "+0.24%");
   assert.equal(formatUsd(stats.expectancyUsd, { signed: true }), "+$0.71");
-  assert.equal(feeDragFromTrades(trades, "crypto"), null);
+  const tapeFees = feeDragFromTrades(trades, "crypto");
+  assert.equal(tapeFees.status, "known");
+  assert.equal(tapeFees.n, 106);
+  assert.equal(tapeFees.fee_usd, 16.64);
+  assert.equal(tapeFees.sell_fee_usd, 6.53);
 });
 
 test("order id collapses duplicate sells and fee dollars stay explicit", () => {
@@ -80,7 +84,7 @@ test("live backend stays rules and crypto OOS keeps rules, logistic, and lgbm", 
   const crypto = summary.find((row) => row.sleeve === "crypto");
   const derived = deriveSleeve(crypto);
   assert.equal(formatPct(derived.killHeadroomFrac), "1.3%");
-  assert.equal(formatUsd(derived.killHeadroom), "$3.88");
+  assert.equal(formatUsd(derived.killHeadroom), "$4.04");
   assert.equal(formatPct(derived.dayKillFrac), "-10.0%");
   assert.equal(formatUsd(derived.dayKill), "-$30.00");
   assert.equal(formatPct(derived.dayTargetFrac, { signed: true }), "+2.5%");
@@ -104,7 +108,12 @@ test("models tab markup loads the scorecard instead of a second page", () => {
   assert.match(scorecard.oos.note, /190 RT/);
   assert.match(scorecard.oos.note, /T24d will set FEE_BPS/);
   assert.equal(scorecard.oos.fee_bps, 30);
-  assert.equal(scorecard.fee_drag.status, "unknown");
+  assert.equal(scorecard.fee_drag.status, "known");
+  assert.equal(scorecard.fee_drag.fee_usd, 16.64);
+  assert.equal(scorecard.fee_drag.n, 106);
+  assert.equal(scorecard.signal_linkage.status, "known");
+  assert.equal(scorecard.signal_linkage.artifact_count, 8);
+  assert.equal(scorecard.signal_linkage.outcome_count, 0);
   assert.equal(app.includes("T24b will improve joined-fill metrics."), true);
   assert.equal(app.includes("signal_artifacts"), true);
   assert.equal(app.includes("signal_trade_outcomes"), true);
