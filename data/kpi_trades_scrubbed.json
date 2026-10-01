@@ -1368,6 +1368,18 @@
     "fee_frac_of_book": 0.0005
   },
   {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-10-01T06:49:52.849228+00:00",
+    "ticker": "SEI",
+    "side": "sell",
+    "notional_frac_of_book": 0.0732,
+    "pnl_frac_of_book": -0.004565,
+    "why": "artifact sell ml LGBM P(up 8h)=0.39 < buy>=0.58; spot exit/reduce (conv 0.6125)",
+    "running_pnl_frac": 0.053597,
+    "running_balance_frac": 1.053597,
+    "fee_frac_of_book": 0.0007
+  },
+  {
     "sleeve": "equities",
     "timestamp_et": "2026-09-25T19:37:00+00:00",
     "ticker": "QCOM",
