@@ -35,7 +35,7 @@ body {
     var(--bg);
 }
 
-body, button, input { letter-spacing: 0; }
+body, button, input, select { letter-spacing: 0; }
 
 .top, .status, main, .book-block, .tapes-head, .tapes, .models-head, #models, footer {
   width: min(1120px, calc(100% - 32px));
@@ -368,7 +368,40 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
   min-height: 44px;
 }
 .tape h3 { margin: 0; font-size: 1.5rem; min-width: 0; }
-.tape-head .tape-export { margin-left: auto; }
+.tape-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+  margin-left: auto;
+}
+.tape-month {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+.tape-month select {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  border-radius: 999px;
+  min-height: 44px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.tape-count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+.tape-head .tape-export { margin-left: 0; }
 .tape-toggle {
   appearance: none;
   background: none;
@@ -406,10 +439,12 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
   cursor: pointer;
 }
 .tape-export:hover,
+.tape-month select:hover,
 .repo-links a:hover {
   border-color: var(--crypto);
 }
 .tape-export:focus-visible,
+.tape-month select:focus-visible,
 .tape-toggle:focus-visible,
 .repo-links a:focus-visible,
 .curve-controls button:focus-visible,
@@ -627,6 +662,11 @@ code { color: var(--ink); }
   .metric .v, .pair .primary { font-size: 1.15rem; }
   .metrics { gap: 12px; }
   .tape-head { align-items: stretch; }
+  .tape-head .tape-tools {
+    margin-left: 0;
+    width: 100%;
+    justify-content: space-between;
+  }
   .tape-head .tape-export {
     margin-left: 0;
     flex: 1 1 100%;
