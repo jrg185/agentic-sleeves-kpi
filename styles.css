@@ -159,9 +159,10 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
   text-transform: uppercase;
 }
 
-.chip.sample, .chip.stale { color: var(--sample); }
-.chip.stale { border-color: rgba(230, 195, 106, 0.55); }
+.chip.sample, .chip.stale, .chip.paused { color: var(--sample); }
+.chip.stale, .chip.paused { border-color: rgba(230, 195, 106, 0.55); }
 .chip.live { color: var(--up); }
+.sleeve-head .chip { margin: 0; }
 .chip.error { color: var(--down); border-color: rgba(229, 154, 132, 0.55); }
 .status-copy { margin: 0; }
 .status-error { color: var(--down); }
@@ -199,7 +200,8 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
 }
 
 .sleeve-head h2 { margin: 0; font-size: 1.8rem; }
-.sleeve-head time { color: var(--muted); font-size: 0.85rem; }
+.sleeve-head time, .sleeve-head .fine { color: var(--muted); font-size: 0.85rem; }
+.sleeve-head .fine { margin: 0; }
 
 .metrics {
   display: grid;
@@ -316,6 +318,29 @@ h1 { margin: 0; font-size: clamp(2.6rem, 5vw, 4.4rem); line-height: 0.92; }
 .pos + .pos { margin-top: 16px; }
 .pos h3 { margin: 0 0 8px; font-size: 1.35rem; }
 .model-card { scroll-margin-top: 16px; }
+.model-scorecard { margin: 4px 0 16px; }
+.score-scroll { overflow-x: auto; margin-top: 14px; }
+.score-oos {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.score-oos th,
+.score-oos td {
+  text-align: left;
+  padding: 8px 12px 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-weight: 400;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+.score-oos th {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.score-oos td { font-size: 0.92rem; }
 
 .tapes {
   /* One column. The board is capped at 1120px, and each tape needs that

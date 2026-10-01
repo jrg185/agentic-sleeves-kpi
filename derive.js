@@ -241,3 +241,138 @@ export function winTone(stats) {
   if (stats.wins === stats.losses) return tone(0);
   return tone(stats.wins - stats.losses);
 }
+
+const OOS_MODEL_ORDER = ["rules", "logistic", "lgbm"];
+const FEE_KEYS = ["fee_usd", "fee", "fee_charged"];
+
+function finiteFrac(value) {
+  return num(value);
+}
+
+// Same exit rule as winStats. order id collapses duplicate sells when the
+// field is actually on the row. The scrubbed Pages tape does not carry it.
+export function closedFillStats(trades, sleeve, seed = SEEDS_USD.crypto) {
+  const rows = Array.isArray(trades) ? trades : [];
+  const wanted = sleeve === "combined" ? ["crypto", "equities"] : [sleeve];
+  const seen = new Set();
+  let wins = 0;
+  let losses = 0;
+  let flats = 0;
+  let deduped = 0;
+  let orderIdAvailable = false;
+  let sum = 0;
+  for (const trade of rows) {
+    if (!wanted.includes(sleeveKey(trade))) continue;
+    if (String(trade?.side || "").trim().toLowerCase() !== "sell") continue;
+    const frac = exitPnlFrac(trade);
+    if (frac == null) continue;
+    const orderId = String(trade?.order_id || "").trim();
+    if (orderId) {
+      orderIdAvailable = true;
+      if (seen.has(orderId)) {
+        deduped += 1;
+        continue;
+      }
+      seen.add(orderId);
+    }
+    if (frac === 0) {
+      flats += 1;
+      continue;
+    }
+    if (frac > 0) wins += 1;
+    else losses += 1;
+    sum += frac;
+  }
+  const decided = wins + losses;
+  const expectancyFrac = decided === 0 ? null : sum / decided;
+  return {
+    wins,
+    losses,
+    flats,
+    decided,
+    rate: decided === 0 ? null : wins / decided,
+    expectancyFrac,
+    expectancyUsd: money(seed, expectancyFrac),
+    seed,
+    deduped,
+    orderIdAvailable,
+  };
+}
+
+function feeAmount(row) {
+  for (const key of FEE_KEYS) {
+    if (row && Object.prototype.hasOwnProperty.call(row, key)) {
+      const amount = finiteFrac(row[key]);
+      if (amount != null) return amount;
+    }
+  }
+  return null;
+}
+
+export function feeDragFromTrades(trades, sleeve = "crypto", seed = SEEDS_USD.crypto) {
+  const rows = Array.isArray(trades) ? trades : [];
+  const seen = new Set();
+  let sawField = false;
+  let numeric = false;
+  let total = 0;
+  let sellTotal = 0;
+  let n = 0;
+  for (const trade of rows) {
+    if (sleeveKey(trade) !== sleeve) continue;
+    const hasField = FEE_KEYS.some((key) => trade && Object.prototype.hasOwnProperty.call(trade, key));
+    if (!hasField) continue;
+    sawField = true;
+    const orderId = String(trade?.order_id || "").trim();
+    if (orderId) {
+      if (seen.has(orderId)) continue;
+      seen.add(orderId);
+    }
+    const amount = feeAmount(trade);
+    if (amount == null) continue;
+    numeric = true;
+    total += amount;
+    n += 1;
+    if (String(trade?.side || "").trim().toLowerCase() === "sell") sellTotal += amount;
+  }
+  if (!sawField || !numeric) return null;
+  const roundUsd = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
+  const feeUsd = roundUsd(total);
+  const sellFeeUsd = roundUsd(sellTotal);
+  return {
+    status: "known",
+    fee_usd: feeUsd,
+    sell_fee_usd: sellFeeUsd,
+    fee_frac: seed ? feeUsd / seed : null,
+    n,
+    seed_usd: seed,
+    note: "Sum of fee dollars on the crypto rows in this snapshot.",
+  };
+}
+
+export function inferLiveBackend(models) {
+  const list = Array.isArray(models?.models) ? models.models : [];
+  const crypto = list.find((model) => String(model?.sleeve || "").trim().toLowerCase() === "crypto") || {};
+  const oosNote = crypto.oos && typeof crypto.oos === "object" ? crypto.oos.note : "";
+  const text = [models?.note, crypto.used, crypto.training, oosNote].filter(Boolean).join("\n");
+  const rules = text.includes("--backend rules");
+  return {
+    id: rules ? "rules" : null,
+    cli: rules ? "--backend rules" : null,
+    note: rules
+      ? "The CLI is still --backend rules."
+      : "Live backend is not stated in data/models.json. Not inferred.",
+  };
+}
+
+export function cryptoOosModels(payload) {
+  const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.rows) ? payload.rows : [];
+  const crypto = rows.filter((row) => {
+    const sleeve = String(row?.sleeve || row?.asset_class || "").trim().toLowerCase();
+    return sleeve === "crypto";
+  });
+  return crypto.slice().sort((a, b) => {
+    const ai = OOS_MODEL_ORDER.indexOf(String(a?.model || "").toLowerCase());
+    const bi = OOS_MODEL_ORDER.indexOf(String(b?.model || "").toLowerCase());
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+}

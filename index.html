@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>The Book</title>
-  <meta name="description" content="The Book — read-only KPI board for Crypto, Equities, and combined. Dollars are seed times fraction from scrubbed data.">
+  <meta name="description" content="The Book — read-only KPI board. Crypto is the live Agentic sleeve. Equities is paused. Dollars are the scrubbed seed times the fraction.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%2312110e' width='32' height='32'/%3E%3Crect fill='%23e3a15a' x='6' y='8' width='8' height='16'/%3E%3Crect fill='%237eb8c4' x='18' y='14' width='8' height='10'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,11 +17,11 @@
       <p class="eyebrow">The Book</p>
       <h1>KPI board</h1>
     </div>
-    <p class="lede">Crypto, Equities, and the combined book. Read-only. Dollars on this page are the book seed times the fraction in the scrubbed snapshot.</p>
+    <p class="lede">Crypto owns the Agentic book. Equities is paused while PBR, BA, and AIG flatten. Read-only. Dollars are the scrubbed seed times the fraction. After that flatten, the crypto rails (−10% kill, +2.5% target) apply to the full book.</p>
     <nav class="repo-links" aria-label="Board links">
       <a href="https://github.com/jrg185/the-book" target="_blank" rel="noopener">The Book repo</a>
       <a href="#model-crypto" data-tab="models">Crypto signals</a>
-      <a href="#model-equities" data-tab="models">Equity signals</a>
+      <a href="#model-equities" data-tab="models">Equity research</a>
     </nav>
   </header>
   <nav class="tabs" aria-label="Board sections">
@@ -36,14 +36,14 @@
     <section class="book-block" id="positions-section" aria-labelledby="positions-heading">
       <div class="block-head">
         <h2 id="positions-heading">Open positions</h2>
-        <p>Net open quantity by ticker. Unrealized is the book seed times the fraction. Avg and mark are prices. Account numbers stay off this page.</p>
+        <p>Net open quantity by ticker. Unrealized is the book seed times the fraction. Equity names are an unwind, queued to flat. Account numbers stay off this page.</p>
       </div>
       <div id="positions"></div>
     </section>
     <section class="book-block" id="curves-section" aria-labelledby="curves-heading">
       <div class="block-head">
-        <h2 id="curves-heading">Equity curves</h2>
-        <p>Book over time from sleeve snapshots. The line is book divided by the book seed. Readout dollars are that fraction times the seed.</p>
+        <h2 id="curves-heading">Book history</h2>
+        <p>Book over time from sleeve snapshots. The line is book divided by the scrubbed seed. Crypto is the live sleeve. The equities line is the paused desk. Readout dollars are that fraction times the seed.</p>
       </div>
       <div class="curve-controls" role="group" aria-label="Curve series">
         <button type="button" data-curve="all" aria-pressed="true">All</button>
@@ -62,7 +62,7 @@
   <div id="panel-models" hidden>
     <section class="models-head">
       <h2>Models</h2>
-      <p>What is in use, how it was trained, the data source, and the latest out-of-sample read. This tab reads <code>data/models.json</code> only.</p>
+      <p>Crypto scorecard is the live backend, closed-fill win rate and expectancy, fee drag, kill headroom, and the out-of-sample read. Model cards still read <code>data/models.json</code> and <code>data/models_oos.json</code>.</p>
     </section>
     <div id="models"></div>
   </div>
@@ -71,7 +71,7 @@
     <nav class="repo-links" aria-label="Board links">
       <a href="https://github.com/jrg185/the-book" target="_blank" rel="noopener">The Book repo</a>
       <a href="#model-crypto" data-tab="models">Crypto signals</a>
-      <a href="#model-equities" data-tab="models">Equity signals</a>
+      <a href="#model-equities" data-tab="models">Equity research</a>
     </nav>
   </footer>
   <noscript>This board needs JavaScript to read the committed JSON snapshot.</noscript>

@@ -1,0 +1,102 @@
+{
+  "sleeve": "crypto",
+  "ticket": "T24e",
+  "live_backend": {
+    "id": "rules",
+    "cli": "--backend rules",
+    "promoted_model": "lgbm",
+    "promoted_in_use": false,
+    "source": "data/models.json",
+    "note": "The CLI is still --backend rules. lgbm is promoted on after-cost mean and is not the live backend."
+  },
+  "closed_fills": {
+    "wins": 23,
+    "losses": 18,
+    "flats": 0,
+    "decided": 41,
+    "win_rate": 0.560976,
+    "expectancy_frac": 0.002377,
+    "expectancy_usd": 0.71,
+    "seed_usd": 300,
+    "deduped": 0,
+    "order_id_available": false,
+    "dedupe": "scrubbed-rows",
+    "note": "Sell fills with a finite P&L. Flat zero is excluded, same as sleeve Win %. The scrubbed tape has no order id, so rows are not collapsed. T24b will improve joined-fill metrics."
+  },
+  "order_id_unique": null,
+  "fee_drag": {
+    "status": "unknown",
+    "fee_usd": null,
+    "sell_fee_usd": null,
+    "fee_frac": null,
+    "n": null,
+    "seed_usd": 300,
+    "note": "No fee column on the scrubbed tape. Not estimated."
+  },
+  "kill": {
+    "as_of": "2026-10-01T00:08:55+00:00",
+    "kill_headroom_stored": 1.323233,
+    "kill_headroom_frac": 0.01323233,
+    "kill_headroom_usd": 3.97,
+    "day_kill_pct": -0.1,
+    "day_kill_usd": -30.0,
+    "day_target_pct": 0.025,
+    "day_target_usd": 7.5,
+    "seed_usd": 300,
+    "note": "Same reading as the crypto sleeve card. A stored absolute value above 1 is percent points."
+  },
+  "oos": {
+    "fee_bps": 30,
+    "updated_at": "2026-09-28T00:16:00Z",
+    "benchmark_note": "Crypto sleeve_ir_vs_spy uses BTC-USD hourly, not SPY. LightGBM promotion is after-cost mean only.",
+    "note": "Out-of-sample after-cost uses 30 bp. Live fees are higher. T24d will fee-correct this comparison.",
+    "models": [
+      {
+        "model": "rules",
+        "auc": 0.4998,
+        "brier": 0.4293,
+        "n_long": 49325,
+        "after_cost_mean": -0.0016,
+        "ir_vs_btc": -0.9805,
+        "n_cohorts": 1397,
+        "promoted": false
+      },
+      {
+        "model": "logistic",
+        "auc": 0.5267,
+        "brier": 0.2428,
+        "n_long": 2754,
+        "after_cost_mean": 0.0024,
+        "ir_vs_btc": 0.2351,
+        "n_cohorts": 1397,
+        "promoted": false
+      },
+      {
+        "model": "lgbm",
+        "auc": 0.53,
+        "brier": 0.2432,
+        "n_long": 6831,
+        "after_cost_mean": 0.0028,
+        "ir_vs_btc": 0.1113,
+        "n_cohorts": 1397,
+        "promoted": true
+      }
+    ]
+  },
+  "last_train": {
+    "models_as_of": "2026-09-28T00:16:00Z",
+    "oos_updated_at": "2026-09-28T00:16:00Z",
+    "trained_at": null,
+    "promoted_at": null,
+    "note": "No separate train or promote timestamp is in the exported model files."
+  },
+  "signal_linkage": {
+    "status": "unknown",
+    "artifacts_table": "signal_artifacts",
+    "outcomes_table": "signal_trade_outcomes",
+    "artifact_count": null,
+    "outcome_count": null,
+    "last_generated_at": null,
+    "note": "Scrubbed Pages JSON has no signal_artifacts or signal_trade_outcomes counts. Not estimated."
+  }
+}

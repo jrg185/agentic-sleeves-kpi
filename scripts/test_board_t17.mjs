@@ -25,7 +25,7 @@ function signalHrefs(label) {
 }
 
 test("header and footer signal links stay on this page", () => {
-  for (const label of ["Crypto signals", "Equity signals"]) {
+  for (const label of ["Crypto signals", "Equity research"]) {
     const hrefs = signalHrefs(label);
     assert.equal(hrefs.length, 2, label);
     for (const href of hrefs) {
@@ -35,7 +35,7 @@ test("header and footer signal links stay on this page", () => {
     }
   }
   assert.deepEqual(signalHrefs("Crypto signals"), ["#model-crypto", "#model-crypto"]);
-  assert.deepEqual(signalHrefs("Equity signals"), ["#model-equities", "#model-equities"]);
+  assert.deepEqual(signalHrefs("Equity research"), ["#model-equities", "#model-equities"]);
   assert.equal(html.includes('href="https://github.com/jrg185/the-book"'), true);
 });
 
