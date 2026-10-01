@@ -190,32 +190,55 @@ class ScorecardTests(unittest.TestCase):
         self.assertEqual(built["live_backend"]["cli"], "--backend rules")
         self.assertEqual(built["live_backend"]["promoted_model"], "lgbm")
         self.assertIs(built["live_backend"]["promoted_in_use"], False)
-        self.assertEqual(built["closed_fills"]["wins"], 23)
-        self.assertEqual(built["closed_fills"]["losses"], 18)
-        self.assertEqual(built["closed_fills"]["expectancy_usd"], 0.71)
+        # Counts and dollars move on every export. Read them from the committed
+        # tape, summary, and meta instead of pinning a snapshot literal.
+        tape_fills = export_kpi.closed_fill_stats(trades, "crypto")
+        for key in ("wins", "losses", "expectancy_usd"):
+            self.assertEqual(built["closed_fills"][key], tape_fills[key])
+            self.assertEqual(committed["closed_fills"][key], tape_fills[key])
         self.assertEqual(built["closed_fills"]["dedupe"], "scrubbed-rows")
+        tape_fees = export_kpi.fee_drag_from_rows(trades)
+        self.assertIsNotNone(tape_fees)
         self.assertEqual(built["fee_drag"]["status"], "known")
-        self.assertEqual(built["fee_drag"]["fee_usd"], 16.64)
-        self.assertEqual(built["fee_drag"]["sell_fee_usd"], 6.53)
-        self.assertEqual(built["fee_drag"]["n"], 106)
-        self.assertEqual(built["fee_drag"]["fee_frac"], 0.055467)
+        self.assertEqual(committed["fee_drag"]["status"], "known")
+        for key in ("fee_usd", "sell_fee_usd", "fee_frac", "n"):
+            self.assertIn(key, built["fee_drag"])
+            self.assertEqual(built["fee_drag"][key], tape_fees[key])
+            self.assertEqual(committed["fee_drag"][key], tape_fees[key])
         self.assertIn("95 bps/leg", built["fee_drag"]["note"])
-        self.assertEqual(built["signal_linkage"]["status"], "known")
-        self.assertEqual(built["signal_linkage"]["artifact_count"], 8)
-        self.assertEqual(built["signal_linkage"]["outcome_count"], 0)
-        self.assertEqual(built["signal_linkage"]["last_generated_at"], "2026-10-01T00:58:40+00:00")
-        self.assertEqual(built["oos"]["fee_bps"], 30)
+        linkage = meta.get("signal_linkage") or {}
+        self.assertEqual(built["signal_linkage"]["status"], linkage.get("status"))
+        self.assertEqual(built["signal_linkage"]["artifact_count"], linkage.get("artifact_count"))
+        self.assertEqual(built["signal_linkage"]["outcome_count"], linkage.get("outcome_count"))
+        self.assertEqual(built["signal_linkage"]["last_generated_at"], linkage.get("last_generated_at"))
+        self.assertEqual(built["oos"]["fee_bps"], committed["oos"]["fee_bps"])
+        self.assertEqual(built["oos"]["fee_bps"], export_kpi.OOS_FEE_BPS)
         self.assertIn("95 bps/leg", built["oos"]["note"])
         self.assertIn("190 RT", built["oos"]["note"])
         self.assertIn("T24d will set FEE_BPS", built["oos"]["note"])
         self.assertEqual([row["model"] for row in built["oos"]["models"]], ["rules", "logistic", "lgbm"])
         self.assertEqual(built["oos"]["models"][2]["promoted"], True)
         crypto = next(row for row in summary if row["sleeve"] == "crypto")
+        expected_kill = export_kpi.kill_block(summary)
+        head = export_kpi.as_fraction(crypto["kill_headroom_frac"])
+        self.assertEqual(built["kill"], expected_kill)
+        self.assertEqual(committed["kill"], expected_kill)
         self.assertEqual(built["kill"]["kill_headroom_stored"], crypto["kill_headroom_frac"])
-        self.assertEqual(built["kill"]["kill_headroom_frac"], crypto["kill_headroom_frac"] / 100)
-        self.assertEqual(built["kill"]["kill_headroom_usd"], 4.04)
-        self.assertEqual(built["kill"]["day_kill_pct"], crypto["day_kill_pct"])
-        self.assertEqual(built["kill"]["day_target_pct"], crypto["day_target_pct"])
+        self.assertEqual(built["kill"]["kill_headroom_frac"], head)
+        self.assertEqual(built["kill"]["kill_headroom_usd"], export_kpi._cents(head))
+        self.assertEqual(built["kill"]["day_kill_pct"], export_kpi.as_fraction(crypto["day_kill_pct"]))
+        self.assertEqual(built["kill"]["day_target_pct"], export_kpi.as_fraction(crypto["day_target_pct"]))
+        for key in (
+            "kill_headroom_stored",
+            "kill_headroom_frac",
+            "kill_headroom_usd",
+            "day_kill_pct",
+            "day_kill_usd",
+            "day_target_pct",
+            "day_target_usd",
+        ):
+            self.assertIn(key, built["kill"])
+            self.assertIsNotNone(built["kill"][key])
         blob = json.dumps(built)
         self.assertNotIn('"order_id"', blob)
         self.assertNotIn("should-not-survive", blob)

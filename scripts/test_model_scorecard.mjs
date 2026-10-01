@@ -19,26 +19,40 @@ const trades = read("kpi_trades_scrubbed.json");
 const models = read("models.json");
 const oos = read("models_oos.json");
 const summary = read("kpi_summary.json");
+const scorecard = read("model_scorecard.json");
+const meta = read("meta.json");
 const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
 test("crypto closed fills match sleeve win rules and the scrubbed tape", () => {
   const stats = closedFillStats(trades, "crypto");
-  assert.equal(stats.wins, 23);
-  assert.equal(stats.losses, 18);
-  assert.equal(stats.flats, 0);
-  assert.equal(stats.decided, 41);
-  assert.equal(stats.orderIdAvailable, false);
-  assert.equal(stats.deduped, 0);
-  assert.equal(formatWinPct(stats.rate), "56%");
-  assert.equal(formatWinRecord(stats), "23\u201318");
-  assert.equal(formatPct(stats.expectancyFrac, { signed: true, digits: 2 }), "+0.24%");
-  assert.equal(formatUsd(stats.expectancyUsd, { signed: true }), "+$0.71");
+  const fills = scorecard.closed_fills;
+  assert.equal(stats.wins, fills.wins);
+  assert.equal(stats.losses, fills.losses);
+  assert.equal(stats.flats, fills.flats);
+  assert.equal(stats.decided, fills.decided);
+  assert.equal(stats.orderIdAvailable, fills.order_id_available);
+  assert.equal(stats.deduped, fills.deduped);
+  assert.equal(formatWinPct(stats.rate), formatWinPct(fills.win_rate));
+  assert.equal(formatWinRecord(stats), formatWinRecord(fills));
+  assert.match(formatWinRecord(stats), /^\d+\u2013\d+$/);
+  assert.equal(
+    formatPct(stats.expectancyFrac, { signed: true, digits: 2 }),
+    formatPct(fills.expectancy_frac, { signed: true, digits: 2 })
+  );
+  assert.equal(
+    formatUsd(stats.expectancyUsd, { signed: true }),
+    formatUsd(fills.expectancy_usd, { signed: true })
+  );
+  assert.match(formatUsd(fills.expectancy_usd, { signed: true }), /^[+-]\$\d+\.\d{2}$/);
   const tapeFees = feeDragFromTrades(trades, "crypto");
   assert.equal(tapeFees.status, "known");
-  assert.equal(tapeFees.n, 106);
-  assert.equal(tapeFees.fee_usd, 16.64);
-  assert.equal(tapeFees.sell_fee_usd, 6.53);
+  assert.equal(scorecard.fee_drag.status, "known");
+  assert.equal(tapeFees.n, scorecard.fee_drag.n);
+  assert.equal(tapeFees.fee_usd, scorecard.fee_drag.fee_usd);
+  assert.equal(tapeFees.sell_fee_usd, scorecard.fee_drag.sell_fee_usd);
+  assert.equal(typeof tapeFees.fee_usd, "number");
+  assert.equal(typeof tapeFees.sell_fee_usd, "number");
 });
 
 test("order id collapses duplicate sells and fee dollars stay explicit", () => {
@@ -83,11 +97,30 @@ test("live backend stays rules and crypto OOS keeps rules, logistic, and lgbm", 
   assert.equal(rows.find((row) => row.model === "logistic").promoted, false);
   const crypto = summary.find((row) => row.sleeve === "crypto");
   const derived = deriveSleeve(crypto);
-  assert.equal(formatPct(derived.killHeadroomFrac), "1.3%");
-  assert.equal(formatUsd(derived.killHeadroom), "$4.04");
-  assert.equal(formatPct(derived.dayKillFrac), "-10.0%");
-  assert.equal(formatUsd(derived.dayKill), "-$30.00");
-  assert.equal(formatPct(derived.dayTargetFrac, { signed: true }), "+2.5%");
+  const kill = scorecard.kill;
+  for (const key of [
+    "kill_headroom_stored",
+    "kill_headroom_frac",
+    "kill_headroom_usd",
+    "day_kill_pct",
+    "day_kill_usd",
+    "day_target_pct",
+    "day_target_usd",
+  ]) {
+    assert.equal(typeof kill[key], "number");
+  }
+  assert.equal(derived.killHeadroom, kill.kill_headroom_usd);
+  assert.equal(formatUsd(derived.killHeadroom), formatUsd(kill.kill_headroom_usd));
+  assert.match(formatUsd(kill.kill_headroom_usd), /^\$\d+\.\d{2}$/);
+  assert.equal(formatPct(derived.killHeadroomFrac), formatPct(kill.kill_headroom_frac));
+  assert.equal(derived.dayKill, kill.day_kill_usd);
+  assert.equal(formatUsd(derived.dayKill), formatUsd(kill.day_kill_usd));
+  assert.equal(formatPct(derived.dayKillFrac), formatPct(kill.day_kill_pct));
+  assert.equal(derived.dayTarget, kill.day_target_usd);
+  assert.equal(
+    formatPct(derived.dayTargetFrac, { signed: true }),
+    formatPct(kill.day_target_pct, { signed: true })
+  );
 });
 
 test("models tab markup loads the scorecard instead of a second page", () => {
@@ -103,17 +136,19 @@ test("models tab markup loads the scorecard instead of a second page", () => {
   assert.equal(app.includes("190 RT"), true);
   assert.equal(app.includes("fee_frac_of_book"), true);
   assert.equal(app.includes('"Fee"'), true);
-  const scorecard = read("model_scorecard.json");
   assert.match(scorecard.oos.note, /95 bps\/leg/);
   assert.match(scorecard.oos.note, /190 RT/);
   assert.match(scorecard.oos.note, /T24d will set FEE_BPS/);
   assert.equal(scorecard.oos.fee_bps, 30);
+  const tapeFees = feeDragFromTrades(trades, "crypto");
   assert.equal(scorecard.fee_drag.status, "known");
-  assert.equal(scorecard.fee_drag.fee_usd, 16.64);
-  assert.equal(scorecard.fee_drag.n, 106);
-  assert.equal(scorecard.signal_linkage.status, "known");
-  assert.equal(scorecard.signal_linkage.artifact_count, 8);
-  assert.equal(scorecard.signal_linkage.outcome_count, 0);
+  assert.equal(scorecard.fee_drag.fee_usd, tapeFees.fee_usd);
+  assert.equal(scorecard.fee_drag.sell_fee_usd, tapeFees.sell_fee_usd);
+  assert.equal(scorecard.fee_drag.n, tapeFees.n);
+  assert.equal(scorecard.signal_linkage.status, meta.signal_linkage.status);
+  assert.equal(scorecard.signal_linkage.artifact_count, meta.signal_linkage.artifact_count);
+  assert.equal(scorecard.signal_linkage.outcome_count, meta.signal_linkage.outcome_count);
+  assert.equal(scorecard.signal_linkage.last_generated_at, meta.signal_linkage.last_generated_at);
   assert.equal(app.includes("T24b will improve joined-fill metrics."), true);
   assert.equal(app.includes("signal_artifacts"), true);
   assert.equal(app.includes("signal_trade_outcomes"), true);
