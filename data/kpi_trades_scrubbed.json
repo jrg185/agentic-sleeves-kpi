@@ -1272,6 +1272,30 @@
     "fee_frac_of_book": 0.0007
   },
   {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-10-01T00:56:42.014067+00:00",
+    "ticker": "XCN",
+    "side": "sell",
+    "notional_frac_of_book": 0.077533,
+    "pnl_frac_of_book": -0.012936,
+    "why": "artifact sell (24h -3.26% vol z=3.58 conv 0.788); spot exit/reduce advisory",
+    "running_pnl_frac": 0.084506,
+    "running_balance_frac": 1.084506,
+    "fee_frac_of_book": 0.0
+  },
+  {
+    "sleeve": "crypto",
+    "timestamp_et": "2026-10-01T00:57:01.481993+00:00",
+    "ticker": "STRK",
+    "side": "buy",
+    "notional_frac_of_book": 0.0596,
+    "pnl_frac_of_book": 0.0,
+    "why": "artifact buy $17.89 conv 0.596 (+2.68% 24h vol z=0.82); momentum + participation spot long",
+    "running_pnl_frac": 0.084506,
+    "running_balance_frac": 1.084506,
+    "fee_frac_of_book": 0.0
+  },
+  {
     "sleeve": "equities",
     "timestamp_et": "2026-09-25T19:37:00+00:00",
     "ticker": "QCOM",
