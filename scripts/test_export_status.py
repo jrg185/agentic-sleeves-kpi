@@ -236,7 +236,7 @@ class ScorecardTests(unittest.TestCase):
         self.assertEqual(built["oos"]["models"][2]["promoted"], True)
         crypto = next(row for row in summary if row["sleeve"] == "crypto")
         self.assertEqual(built["kill"]["kill_headroom_stored"], crypto["kill_headroom_frac"])
-        self.assertEqual(built["kill"]["kill_headroom_frac"], crypto["kill_headroom_frac"] / 100)
+        self.assertEqual(built["kill"]["kill_headroom_frac"], export_kpi.as_fraction(crypto["kill_headroom_frac"]))
         self.assertEqual(built["kill"]["kill_headroom_usd"], committed["kill"]["kill_headroom_usd"])
         self.assertEqual(built["kill"]["kill_headroom_usd"], export_kpi._cents(built["kill"]["kill_headroom_frac"]))
         self.assertEqual(built["kill"]["day_kill_pct"], crypto["day_kill_pct"])
