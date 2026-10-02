@@ -1,9 +1,9 @@
 {
   "source": "supabase",
-  "fetched_at": "2026-10-02T21:14:13Z",
+  "fetched_at": "2026-10-02T21:18:10Z",
   "export_status": "ok",
   "export_error": null,
-  "export_attempted_at": "2026-10-02T21:14:13Z",
+  "export_attempted_at": "2026-10-02T21:18:10Z",
   "project_ref": "bsnqwgbshwszbjncglqx",
   "views": [
     "public.kpi_summary",
@@ -15,7 +15,7 @@
     "kpi_summary": 3,
     "kpi_trades_scrubbed": 129,
     "open_positions": 16,
-    "sleeve_curves": 1240
+    "sleeve_curves": 1243
   },
   "note": "Exported from scrubbed views. Balances are sleeve book (cash + MTM; interim start + running P&L), not cash. kpi_summary remaps running_bal_vs_start, pnl_pct_of_book, and notes onto running_balance_frac, running_pnl_frac, and note. Tape running_pnl_frac and running_balance_frac are regenerated per sleeve from warehouse trade P&L (seed + cumulative realized), not from a sheet. why is the full note. Page dollars are seed \u00d7 fraction. Sleeve as_of comes from kpi_sleeve_snapshots, inserted by scripts/refresh_kpi_snapshots.py before this export. open_positions.json is net open qty from kpi_trades, marked with the same public quotes as that refresh; unrealized_pnl_frac is the open P&L divided by the sleeve seed. sleeve_curves.json is snapshot history as fractions of the book seed. Raw dollar columns and account ids are not written.",
   "warehouse_status": "ok",
