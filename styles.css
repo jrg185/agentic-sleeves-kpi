@@ -618,15 +618,19 @@ code { color: var(--ink); }
     width: auto;
     white-space: pre-wrap;
   }
-  /* Same tracks on every sleeve so headers and CSV columns line up. */
-  .tape th:nth-child(1) { width: 16%; }
-  .tape th:nth-child(2) { width: 8%; }
-  .tape th:nth-child(3) { width: 8%; }
-  .tape th:nth-child(4) { width: 17%; }
-  .tape th:nth-child(5) { width: 11%; }
-  .tape th:nth-child(6) { width: 12%; }
-  .tape th:nth-child(7) { width: 16%; }
-  .tape th:nth-child(8) { width: 12%; }
+  /* Same tracks on every sleeve so headers and CSV columns line up.
+     All nine columns share the table. Widths must sum to 100%. If 1–8
+     take the whole table, fixed layout gives Why 0px and pre-wrap notes
+     stretch each fill to roughly a line per character. */
+  .tape th:nth-child(1) { width: 14%; } /* Time */
+  .tape th:nth-child(2) { width: 9%; }  /* Ticker */
+  .tape th:nth-child(3) { width: 8%; }  /* Side */
+  .tape th:nth-child(4) { width: 17%; } /* Notional */
+  .tape th:nth-child(5) { width: 8%; }  /* Fee */
+  .tape th:nth-child(6) { width: 9%; }  /* Trade P&L */
+  .tape th:nth-child(7) { width: 10%; } /* Running P&L */
+  .tape th:nth-child(8) { width: 10%; } /* Running balance */
+  .tape th:nth-child(9) { width: 15%; } /* Why */
 }
 
 @media (max-width: 860px) {

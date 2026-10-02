@@ -253,3 +253,22 @@ test("scrubbed crypto tape has September and October and All keeps both", () => 
   const equitySum = equityMonths.reduce((sum, key) => sum + filterTapeByMonth(equities, key).length, 0);
   assert.equal(equitySum, equities.length);
 });
+
+test("desktop fixed tape leaves Why a real share of the table", () => {
+  const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  const start = css.indexOf("@media (min-width: 800px)");
+  const end = css.indexOf("@media (max-width: 860px)");
+  assert.ok(start >= 0 && end > start, "desktop tape media query");
+  const block = css.slice(start, end);
+  assert.match(block, /table-layout:\s*fixed/);
+  const widths = new Map();
+  for (const match of block.matchAll(/\.tape th:nth-child\((\d+)\)\s*\{\s*width:\s*(\d+(?:\.\d+)?)%;/g)) {
+    widths.set(Number(match[1]), Number(match[2]));
+  }
+  assert.deepEqual([...widths.keys()], [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  const sum = [...widths.values()].reduce((total, width) => total + width, 0);
+  assert.equal(sum, 100);
+  const firstEight = [1, 2, 3, 4, 5, 6, 7, 8].reduce((total, index) => total + widths.get(index), 0);
+  assert.ok(firstEight <= 85, `columns 1–8 took ${firstEight}%`);
+  assert.ok(widths.get(9) >= 15, `Why column is ${widths.get(9)}%`);
+});
